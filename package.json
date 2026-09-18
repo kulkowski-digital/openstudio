@@ -1,0 +1,24 @@
+{
+  "name": "openstudio",
+  "version": "0.1.0",
+  "description": "Twoje własne studio AI do obrazów. Wklejasz klucz API, płacisz tylko za to, co wygenerujesz, wszystko zostaje na Twoim dysku.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=20.11" },
+  "bin": { "openstudio": "bin/openstudio.js" },
+  "files": ["bin", "server", "models", "web/dist", "CLAUDE.md", "AGENTS.md", "README.md", "docs"],
+  "scripts": {
+    "start": "node bin/openstudio.js",
+    "dev": "OPENSTUDIO_DEV=1 node bin/openstudio.js",
+    "dev:web": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "test": "node --test \"test/**/*.test.js\"",
+    "doctor": "node bin/openstudio.js doctor"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14",
+    "open": "^10.1.0"
+  },
+  "devDependencies": {}
+}

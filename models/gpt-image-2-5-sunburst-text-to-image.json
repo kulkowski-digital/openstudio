@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "id": "gpt-image-2-5-sunburst-text-to-image",
+  "provider": "kie",
+  "model": "gpt-image-2-5-sunburst-text-to-image",
+  "title": "GPT Image 2.5 Sunburst",
+  "subtitle": "Wariant premium: dokładniejszy, wolniejszy. Do kampanii i finalnych grafik.",
+  "kind": "t2i",
+  "recommended": false,
+  "badges": [
+    "napisy na grafice",
+    "precyzja",
+    "wolniejszy"
+  ],
+  "refs": {
+    "max": 0,
+    "mode": "none"
+  },
+  "typicalSeconds": 90,
+  "pricing": {
+    "unit": "credits",
+    "by": "resolution",
+    "values": {
+      "1K": 10,
+      "2K": 20,
+      "4K": 40
+    },
+    "estimated": {
+      "1K": true,
+      "2K": true,
+      "4K": true
+    }
+  },
+  "fields": [
+    {
+      "name": "prompt",
+      "label": "Co ma być na obrazie?",
+      "type": "textarea",
+      "required": true,
+      "maxLength": 20000,
+      "placeholder": "Plakat z napisem „PIECZARA”, ciemne tło, cyjanowa poświata, minimalizm",
+      "help": "Pisz jak do grafika: co widać, w jakim stylu, jakie kolory. Im konkretniej, tym lepiej."
+    },
+    {
+      "name": "aspect_ratio",
+      "label": "Format",
+      "type": "select",
+      "default": "1:1",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Automatyczny"
+        },
+        {
+          "value": "1:1",
+          "label": "Kwadrat 1:1",
+          "hint": "post, awatar"
+        },
+        {
+          "value": "3:2",
+          "label": "Poziomy 3:2"
+        },
+        {
+          "value": "2:3",
+          "label": "Pionowy 2:3"
+        },
+        {
+          "value": "4:3",
+          "label": "Poziomy 4:3"
+        },
+        {
+          "value": "3:4",
+          "label": "Pionowy 3:4"
+        },
+        {
+          "value": "16:9",
+          "label": "Panorama 16:9",
+          "hint": "miniatura YouTube"
+        },
+        {
+          "value": "9:16",
+          "label": "Pion 9:16",
+          "hint": "Stories, Reels"
+        },
+        {
+          "value": "21:9",
+          "label": "Ultraszeroki 21:9"
+        },
+        {
+          "value": "27:16",
+          "label": "27:16",
+          "only1K": true
+        },
+        {
+          "value": "16:27",
+          "label": "16:27",
+          "only1K": true
+        },
+        {
+          "value": "9:8",
+          "label": "9:8",
+          "only1K": true
+        },
+        {
+          "value": "8:9",
+          "label": "8:9",
+          "only1K": true
+        }
+      ]
+    },
+    {
+      "name": "resolution",
+      "label": "Jakość",
+      "type": "select",
+      "default": "1K",
+      "affectsPrice": true,
+      "options": [
+        {
+          "value": "1K",
+          "label": "1K — tani test",
+          "hint": "najtaniej, do sprawdzenia pomysłu"
+        },
+        {
+          "value": "2K",
+          "label": "2K — do publikacji"
+        },
+        {
+          "value": "4K",
+          "label": "4K — do druku",
+          "hint": "najdrożej i najwolniej"
+        }
+      ]
+    },
+    {
+      "name": "background",
+      "label": "Tło",
+      "type": "select",
+      "default": "auto",
+      "advanced": true,
+      "options": [
+        {
+          "value": "auto",
+          "label": "Jak wyjdzie"
+        },
+        {
+          "value": "opaque",
+          "label": "Pełne"
+        },
+        {
+          "value": "transparent",
+          "label": "Przezroczyste (PNG)",
+          "hint": "do logo i naklejek"
+        }
+      ]
+    },
+    {
+      "name": "count",
+      "label": "Ile wersji naraz",
+      "type": "number",
+      "default": 1,
+      "min": 1,
+      "max": 8,
+      "clientOnly": true,
+      "affectsPrice": true,
+      "help": "Model robi jeden obraz na raz — aplikacja wyśle tyle osobnych zadań i policzy koszt razy tyle."
+    }
+  ]
+}

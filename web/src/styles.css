@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --color-void: #06070D;
+  --color-panel: #0C0E18;
+  --color-panel-2: #121527;
+  --color-line: #1E2338;
+  --color-ink: #EEF1FF;
+  --color-muted: #8A93B2;
+  --color-cyan: #37E7F5;
+  --color-pink: #FF4D9D;
+  --color-orange: #FF8A3D;
+  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--color-void);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Delikatna poświata w tle — jedyny „efekt” w całym interfejsie. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at 15% -10%, rgba(55, 231, 245, 0.08), transparent 60%),
+    radial-gradient(50rem 35rem at 100% 0%, rgba(255, 77, 157, 0.07), transparent 55%);
+}
+
+@utility panel {
+  background: color-mix(in oklab, var(--color-panel) 92%, transparent);
+  border: 1px solid var(--color-line);
+  border-radius: 1rem;
+}
+
+@utility btn-primary {
+  background-image: linear-gradient(100deg, var(--color-pink), var(--color-orange));
+  color: #10060A;
+  font-weight: 800;
+  border-radius: 999px;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+@utility h-display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
+
+.btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-primary:active:not(:disabled) { transform: translateY(1px); }
+.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+input, textarea, select, button { font-family: inherit; }
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #232842; border-radius: 99px; }

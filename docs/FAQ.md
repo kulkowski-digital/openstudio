@@ -1,0 +1,27 @@
+# Coś nie działa
+
+Zacznij od **Ustawienia → Diagnostyka** (albo `npx openstudio doctor`). Raport nie zawiera klucza API, więc możesz go bezpiecznie wkleić w zgłoszeniu.
+
+### „Brak ważnego tokenu sesji”
+Otworzyłeś aplikację bez tokenu (np. z zakładki). Wróć do terminala i użyj adresu z `?t=…`. Token zmienia się przy każdym uruchomieniu — to celowe.
+
+### Strona się nie otwiera
+Sprawdź w terminalu, na którym porcie wystartowała aplikacja (sama szuka wolnego od 4321 w górę). Możesz wymusić swój: `OPENSTUDIO_PORT=5000 npx openstudio`.
+
+### „Ten klucz API nie działa”
+Skopiuj klucz jeszcze raz w całości ze strony kie.ai/api-key. Częsty błąd to ucięty początek lub spacja na końcu.
+
+### „Skończyły się kredyty”
+Doładuj konto u dostawcy. OpenStudio nie sprzedaje kredytów i nie pośredniczy w płatnościach.
+
+### Zadanie ma status „nieznany los”
+Połączenie padło w trakcie wysyłania i **nie wiemy**, czy generacja ruszyła. Zajrzyj do panelu kie.ai. Jeśli zadania tam nie ma, kliknij „Wyślij ponownie (świadomie)”. Aplikacja nigdy nie robi tego sama, żeby nie zapłacić dwa razy.
+
+### „Opłacone, ale niepobrane”
+Obraz powstał, ale pobieranie padło. Kliknij „Pobierz ponownie”. Linki u dostawcy żyją około 24 godzin — po tym czasie plik przepada, choć w historii zostaje ślad.
+
+### Obrazy nie pokazują się w bibliotece
+Biblioteka czyta **z Twojego dysku**, nie z internetu. Sprawdź, czy pliki są w `~/OpenStudio/library/`. Jeśli przeniosłeś folder, aplikacja ich nie znajdzie.
+
+### Instalacja się wysypuje
+Sprawdź `node --version` (potrzebne ≥ 20.11). Projekt nie ma zależności wymagających kompilacji, więc typowe błędy z `node-gyp` tu nie występują — jeśli je widzisz, instalujesz coś innego niż OpenStudio.
