@@ -71,7 +71,7 @@ function JobTile({ job, onChange }) {
       <div className="aspect-square bg-panel-2 flex items-center justify-center relative">
         {job.files?.[0] ? (
           <a href={api.fileUrl(job.files[0])} target="_blank" rel="noreferrer" className="block w-full h-full">
-            <img src={api.fileUrl(job.files[0])} alt={job.values?.prompt || 'wygenerowany obraz'} className="w-full h-full object-cover" />
+            <img src={api.fileUrl(job.files[0])} alt={job.values?.prompt || 'wygenerowany obraz'} className="w-full h-full object-contain" />
           </a>
         ) : inProgress(job.status) ? (
           <div className="flex flex-col items-center gap-2 text-muted text-xs">
