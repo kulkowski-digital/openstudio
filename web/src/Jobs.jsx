@@ -133,7 +133,7 @@ function JobTile({ job, onChange, boards = [], onPinned, fb, tags, onVariant }) 
                   {(rating === 'good' ? tags.praise : tags.issues).map((t) => {
                     const on = picked.includes(t.value)
                     return (
-                      <button key={t.value} onClick={() => setPicked(on ? picked.filter((v) => v !== t.value) : [...picked, t.value])}
+                      <button key={t.value} onClick={() => setPicked((prev) => (prev.includes(t.value) ? prev.filter((v) => v !== t.value) : [...prev, t.value]))}
                         className={`rounded-full border px-2 py-0.5 text-[11px] ${on ? (rating === 'good' ? 'border-cyan text-cyan' : 'border-pink text-pink') : 'border-line text-muted'}`}>
                         {t.label}
                       </button>
