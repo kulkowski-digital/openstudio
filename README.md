@@ -43,7 +43,10 @@ Zobacz [docs/JAK-ZDOBYC-KLUCZ.md](docs/JAK-ZDOBYC-KLUCZ.md). W skrócie: konto n
 - **Automatyczne pobieranie na dysk** — linki u dostawcy żyją około 24 godzin, więc plik ląduje u Ciebie natychmiast, razem z opisem, jakim promptem powstał.
 - **Diagnostyka** jednym kliknięciem: raport gotowy do wklejenia w zgłoszeniu, **bez klucza API**.
 
-W przygotowaniu: **Tablice** (moodboard → „generuj w tym klimacie”) i **Style** (zapisany przepis na wygląd marki).
+- **Tablice** — moodboard jak Pinterest. Wrzucasz inspiracje (przeciągnięciem, `Cmd/Ctrl+V`, przeciągnięciem obrazka z innej karty albo linkiem), zaznaczasz 3–4 i klikasz **„generuj w tym klimacie”**. Gotowe obrazy wracają na tablicę przyciskiem „📌 Przypnij”, więc najlepsze wyniki stają się referencjami dla kolejnych.
+  Inspiracje leżą na Twoim dysku. Do dostawcy trafiają **tylko te, których użyjesz w generacji**, i dopiero w momencie kliknięcia — raz na plik, z ważnością 20 godzin.
+
+W przygotowaniu: **Style** (zapisany przepis na wygląd marki: paleta, chipy opisujące styl, czego unikać).
 
 ## Bezpieczeństwo
 
@@ -64,6 +67,9 @@ Zalecenie: załóż u dostawcy **osobny klucz** tylko dla tej aplikacji, żeby m
 ├─ config.json          ← klucz i ustawienia (prawa 0600)
 ├─ jobs.json            ← historia zadań
 ├─ ledger.json          ← ile kredytów poszło na co
+├─ boards.json          ← tablice inspiracji
+├─ uploads.json         ← które inspiracje są aktualnie wysłane do dostawcy
+├─ boards/<id>/         ← pliki inspiracji
 └─ library/2026-09/     ← obrazy + JSON z promptem obok każdego
 ```
 
@@ -84,7 +90,7 @@ npx openstudio --help
 ```bash
 npm install && npm --prefix web install
 npm run build     # buduje interfejs do web/dist
-npm test          # 38 testów: adapter API, kolejka, bezpieczeństwo, redakcja klucza
+npm test          # 59 testów: adapter API, kolejka, tablice, bezpieczeństwo, redakcja klucza
 npm start
 ```
 

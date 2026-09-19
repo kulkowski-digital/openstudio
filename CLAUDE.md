@@ -29,6 +29,7 @@ Uruchom `npm run doctor` i czytaj raport (nie zawiera klucza API):
 
 - **Nie wypisuj klucza API** użytkownika w odpowiedzi, w logu ani w commicie. W repo nie ma i nie może być pliku z kluczem.
 - **Nie ponawiaj automatycznie** żądania generacji (`POST /api/generate`, `createTask`). Dostawca nie ma idempotencji: powtórka = druga opłata. Zadanie ze statusem `unknown` ponawia **tylko użytkownik**, świadomie.
+- **Nie wysyłaj inspiracji z tablicy do dostawcy „na zapas”.** Obietnica z UI brzmi: pliki idą dopiero przy generacji i tylko te wybrane. Upload robi wyłącznie `references.js`.
 - Nie zmieniaj bindowania serwera z `127.0.0.1` na `0.0.0.0`. To zabezpieczenie, nie ograniczenie.
 - Nie dopisuj zależności wymagających kompilacji (np. `better-sqlite3`, `sharp`) — psują instalację u osób nietechnicznych, a to główna grupa użytkowników.
 
@@ -40,6 +41,8 @@ server/
   app.js              trasy HTTP (Hono)
   security.js         token sesji, kontrola Host/Origin
   queue.js            kolejka, polling, pobieranie plików
+  boards.js           tablice inspiracji (pliki na dysku, deduplikacja, og:image)
+  references.js       leniwy upload inspiracji do dostawcy z cache na 20 h
   models.js           wczytywanie i walidacja manifestów, wycena
   store.js            config.json / jobs.json / ledger.json
   providers/kie.js    adapter API dostawcy (interfejs: submit, status, credits, upload)
