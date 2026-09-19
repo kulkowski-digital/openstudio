@@ -35,21 +35,21 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
         setBusy((n) => n - 1)
       }
     }
-    if (added.length) onChange([...refs, ...added.filter((a) => !refs.some((r) => r.pin.id === a.pin.id))])
-  }, [refs, onChange])
+    if (added.length) onChange((prev) => [...prev, ...added.filter((a) => !prev.some((r) => r.pin.id === a.pin.id))])
+  }, [onChange])
 
   const addUrl = useCallback(async (url) => {
     setError(null)
     setBusy((n) => n + 1)
     try {
       const res = await api.upload({ url })
-      if (!refs.some((r) => r.pin.id === res.pin.id)) onChange([...refs, { pin: res.pin, role: 'inspiracja', note: '' }])
+      onChange((prev) => (prev.some((r) => r.pin.id === res.pin.id) ? prev : [...prev, { pin: res.pin, role: 'inspiracja', note: '' }]))
     } catch (err) {
       setError(err.message)
     } finally {
       setBusy((n) => n - 1)
     }
-  }, [refs, onChange])
+  }, [onChange])
 
   // Cmd/Ctrl+V działa na całym ekranie generatora.
   useEffect(() => {
@@ -71,15 +71,15 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
     if (url) return addUrl(url)
   }
 
-  const update = (pinId, patch) => onChange(refs.map((r) => (r.pin.id === pinId ? { ...r, ...patch } : r)))
-  const remove = (pinId) => onChange(refs.filter((r) => r.pin.id !== pinId))
-  const move = (i, dir) => {
+  const update = (pinId, patch) => onChange((prev) => prev.map((r) => (r.pin.id === pinId ? { ...r, ...patch } : r)))
+  const remove = (pinId) => onChange((prev) => prev.filter((r) => r.pin.id !== pinId))
+  const move = (i, dir) => onChange((prev) => {
     const j = i + dir
-    if (j < 0 || j >= refs.length) return
-    const next = [...refs]
+    if (j < 0 || j >= prev.length) return prev
+    const next = [...prev]
     ;[next[i], next[j]] = [next[j], next[i]]
-    onChange(next)
-  }
+    return next
+  })
 
   return (
     <div
