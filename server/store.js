@@ -1,14 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { CONFIG_FILE, JOBS_FILE, LEDGER_FILE, BOARDS_FILE, UPLOADS_FILE, STYLES_FILE, ensureDataDir } from './paths.js'
-import { registerSecret, mask } from './log.js'
+import { registerSecret, mask, log } from './log.js'
 
 const SCHEMA_VERSION = 1
 
 /** Zapis atomowy: najpierw plik tymczasowy, potem rename. Nigdy nie zostaje ogryzek. */
 function writeJson(file, data, mode) {
   ensureDataDir()
-  const tmp = `${file}.tmp`
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2), mode ? { mode } : undefined)
   fs.renameSync(tmp, file)
   if (mode) fs.chmodSync(file, mode)
@@ -17,7 +17,11 @@ function writeJson(file, data, mode) {
 function readJson(file, fallback) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'))
-  } catch {
+  } catch (err) {
+    // Brak pliku to normalny pierwszy start. Plik, który JEST, ale się nie
+    // parsuje, to już awaria — cicho zwrócony fallback wyglądałby jak
+    // „inspiracja zniknęła z tablicy", więc mówimy o tym w logu.
+    if (err.code !== 'ENOENT') log.warn(`Nie udało się odczytać ${path.basename(file)}: ${err.message}. Używam pustej wartości.`)
     return structuredClone(fallback)
   }
 }
