@@ -8,14 +8,17 @@ import { Alert, Spinner } from './ui.jsx'
  * (Twoje zdjęcie, logo, produkt). Każdy ma rolę — i to ona mówi modelowi,
  * co ma z tym plikiem zrobić. Kolejność na liście = kolejność w prompcie.
  */
-export default function References({ refs, onChange, roles, maxRefs, styleRefsCount = 0, disabled }) {
+export default function References({ refs, onChange, roles, maxRefs, styleRefsCount = 0, disabled, overlay, acceptsImages = true }) {
   const [busy, setBusy] = useState(0)
   const [error, setError] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [link, setLink] = useState('')
 
-  const used = refs.slice(0, maxRefs)
-  const extra = refs.slice(maxRefs)
+  const isOverlay = (r) => roles.find((x) => x.value === r.role)?.overlay
+  const modelRefs = refs.filter((r) => !isOverlay(r))
+  const used = modelRefs.slice(0, maxRefs)
+  const extra = modelRefs.slice(maxRefs)
+  const roleChoices = acceptsImages ? roles : roles.filter((r) => r.overlay)
 
   const addFiles = useCallback(async (files) => {
     setError(null)
@@ -87,7 +90,7 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
     >
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm font-semibold">Obrazy do tej generacji</span>
-        <span className="text-xs text-muted font-mono">{used.length}{styleRefsCount ? `+${styleRefsCount} ze stylu` : ''}/{maxRefs}</span>
+        <span className="text-xs text-muted font-mono">{acceptsImages ? `${used.length}${styleRefsCount ? `+${styleRefsCount} ze stylu` : ''}/${maxRefs}` : 'tylko nakładki'}</span>
         <div className="ml-auto flex items-center gap-3">
           {busy > 0 && <Spinner className="text-cyan" />}
           {/* Etykieta z polem w środku: przeglądarka otwiera wybór pliku sama, bez click() z JS-a,
@@ -102,7 +105,9 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
 
       {refs.length === 0 ? (
         <p className="text-xs text-muted leading-relaxed">
-          Wrzuć tu swoje zdjęcie, logo albo produkt (przeciągnij, <span className="font-mono">Cmd/Ctrl+V</span> albo „dodaj własny plik”),
+          Wrzuć tu swoje zdjęcie, logo albo produkt (przeciągnij, <span className="font-mono">Cmd/Ctrl+V</span> albo „dodaj własny plik”).
+          Logo najlepiej jako <b>logo (nakładka)</b> — wtedy nakładamy oryginalny plik po generacji, bez artefaktów i bez kredytów.
+          {' '}Albo
           albo zaznacz inspiracje na <span className="text-cyan">tablicach</span> i kliknij „generuj w tym klimacie”.
           Każdemu obrazowi nadasz rolę — model dostanie w prompcie, co ma z nim zrobić.
         </p>
@@ -110,11 +115,12 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
         <ol className="space-y-2">
           {refs.map((ref, i) => {
             const role = roles.find((r) => r.value === ref.role)
-            const skipped = i >= maxRefs
+            const modelIndex = modelRefs.indexOf(ref)
+            const skipped = !role?.overlay && (modelIndex >= maxRefs || !acceptsImages)
             return (
               <li key={ref.pin.id} className={`flex gap-3 items-start rounded-lg border border-line bg-panel-2/60 p-2 ${skipped ? 'opacity-40' : ''}`}>
                 <div className="flex flex-col items-center gap-1">
-                  <span className="font-mono text-[11px] text-muted">{i + 1}</span>
+                  <span className="font-mono text-[11px] text-muted">{role?.overlay ? '⧉' : modelIndex + 1}</span>
                   <img src={api.fileUrl(ref.pin.file)} alt={ref.pin.name} className="w-16 h-16 rounded-md object-cover border border-line" />
                   <div className="flex gap-1">
                     <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="text-[11px] text-muted disabled:opacity-30" title="wyżej">↑</button>
@@ -123,19 +129,37 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
                 </div>
                 <div className="flex-1 space-y-1.5 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <select value={ref.role} disabled={disabled} onChange={(e) => update(ref.pin.id, { role: e.target.value })}
+                    <select value={ref.role} disabled={disabled}
+                      onChange={(e) => update(ref.pin.id, { role: e.target.value, overlay: roles.find((r) => r.value === e.target.value)?.overlay ? { ...(overlay?.defaults || {}), ...(ref.overlay || {}) } : ref.overlay })}
                       className="rounded-lg bg-panel-2 border border-line px-2 py-1 text-xs">
-                      {roles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                      {(roleChoices.some((r) => r.value === ref.role) ? roleChoices : roles).map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                     <span className="text-[11px] text-muted">{role?.hint}</span>
                     <button type="button" onClick={() => remove(ref.pin.id)} className="ml-auto text-[11px] text-muted hover:text-pink">usuń</button>
                   </div>
+                  {role?.overlay ? (
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      <select value={ref.overlay?.position || overlay?.defaults?.position} disabled={disabled}
+                        onChange={(e) => update(ref.pin.id, { overlay: { ...(overlay?.defaults || {}), ...(ref.overlay || {}), position: e.target.value } })}
+                        className="rounded-lg bg-panel-2 border border-line px-2 py-1 text-[11px]">
+                        {(overlay?.positions || []).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                      </select>
+                      <label className="flex items-center gap-1 text-muted">
+                        szerokość
+                        <input type="range" min={5} max={60} value={ref.overlay?.widthPct ?? overlay?.defaults?.widthPct ?? 18} disabled={disabled}
+                          onChange={(e) => update(ref.pin.id, { overlay: { ...(overlay?.defaults || {}), ...(ref.overlay || {}), widthPct: Number(e.target.value) } })} />
+                        <span className="font-mono">{ref.overlay?.widthPct ?? overlay?.defaults?.widthPct ?? 18}%</span>
+                      </label>
+                      <span className="text-muted/80">oryginał 1:1, zero kredytów; model dostanie tylko prośbę o wolne miejsce</span>
+                    </div>
+                  ) : (
                   <input
                     value={ref.note}
                     disabled={disabled}
                     onChange={(e) => update(ref.pin.id, { note: e.target.value })}
                     placeholder={ref.role === 'wlasne' ? 'co model ma z tym zrobić? (wymagane)' : 'dodatkowa uwaga, np. „w czarnej bluzie” (opcjonalnie)'}
                     className={`w-full rounded-lg bg-panel-2 border px-2 py-1 text-xs ${ref.role === 'wlasne' && !ref.note.trim() ? 'border-pink/60' : 'border-line'}`} />
+                  )}
                   {role?.prompt && (
                     <p className="text-[11px] text-muted/80 leading-relaxed">→ w prompcie: „{role.prompt}”</p>
                   )}

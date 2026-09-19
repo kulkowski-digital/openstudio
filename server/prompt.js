@@ -1,5 +1,6 @@
 import { buildPrompt as withStyle } from './styles.js'
 import { describeReferences } from './reference-roles.js'
+import { describeOverlays } from './overlay.js'
 
 /**
  * JEDYNE miejsce, w którym powstaje prompt wysyłany do modelu.
@@ -8,9 +9,10 @@ import { describeReferences } from './reference-roles.js'
  *
  * Kolejność: to, co napisał użytkownik → co zrobić z załączonymi obrazami → styl.
  */
-export function composePrompt({ userPrompt, references = [], style = null }) {
+export function composePrompt({ userPrompt, references = [], overlays = [], style = null }) {
   const base = String(userPrompt || '').trim()
   const refsNote = describeReferences(references)
-  const withRefs = [base, refsNote].filter(Boolean).join('\n\n')
+  const overlayNote = describeOverlays(overlays)
+  const withRefs = [base, refsNote, overlayNote].filter(Boolean).join('\n\n')
   return withStyle(withRefs, style)
 }

@@ -6,6 +6,7 @@ import { monthDir } from './paths.js'
 import { upsertJob, readJobs, writeJobs, addLedgerEntry, saveCalibration } from './store.js'
 import { calibrationKey, buildInput, countOf, priceFor } from './models.js'
 import { log } from './log.js'
+import { applyOverlays } from './overlay.js'
 
 const POLL_MIN = 2000
 const POLL_MAX = 10000
@@ -45,7 +46,7 @@ export class Queue extends EventEmitter {
   }
 
   /** Tworzy tyle zadań, ile wersji zamówił użytkownik. Zwraca listę zadań. */
-  enqueue({ modelId, values, calibration = {}, references = [], styleId = null, styleName = null, userPrompt = null, variantOf = null, correction = null }) {
+  enqueue({ modelId, values, calibration = {}, references = [], overlays = [], styleId = null, styleName = null, userPrompt = null, variantOf = null, correction = null }) {
     const manifest = this.manifest(modelId)
     if (!manifest) throw new Error(`Nieznany model: ${modelId}`)
     const count = countOf(manifest, values)
@@ -67,6 +68,7 @@ export class Queue extends EventEmitter {
         input,
         values,
         references,
+        overlays,
         pinIds: references.map((r) => r.pinId),
         styleId,
         styleName,
@@ -240,12 +242,27 @@ export class Queue extends EventEmitter {
       fs.writeFileSync(path.join(dir, `${base}.json`), JSON.stringify({
         id: job.id, createdAt: job.createdAt, model: job.model, modelTitle: job.modelTitle,
         prompt: job.values?.prompt, userPrompt: job.userPrompt, style: job.styleName,
-        values: job.values, references: job.references, variantOf: job.variantOf, correction: job.correction,
+        values: job.values, references: job.references, overlays: job.overlays, variantOf: job.variantOf, correction: job.correction,
         credits: job.credits, sourceUrl: url,
       }, null, 2))
     }
     job.files = files
     job.sourceUrls = urls
+    this.#overlay(job)
+  }
+
+  /** Logo nakładane lokalnie — po pobraniu, na oryginał zachowany jako -raw. */
+  #overlay(job) {
+    if (!job.overlays?.length || !job.files?.length) return
+    try {
+      const res = applyOverlays(job.files[0], job.overlays)
+      job.files = [res.file, ...job.files.slice(1)]
+      job.rawFiles = [res.rawFile]
+      job.overlayPlaced = res.placed
+    } catch (err) {
+      job.overlayError = err.human || err.message
+      log.warn('Nakładka logo nie powiodła się:', String(err.message))
+    }
   }
 
   /** Ponawia samo pobranie pliku (GET, więc bezpieczne i darmowe). */

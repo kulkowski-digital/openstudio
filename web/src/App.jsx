@@ -166,6 +166,7 @@ export default function App() {
             onStyleChange={setStyleId}
             roles={state.referenceRoles || []}
             boards={state.boards || []}
+            overlay={state.overlay}
             onQueued={(_jobs, note) => { setTab('library'); setRefs([]); setPreferredModelId(null); if (note) setToast(note); load() }}
           />
         </div>

@@ -17,6 +17,8 @@ import * as stylesStore from './styles.js'
 import { composePrompt } from './prompt.js'
 import { REFERENCE_ROLES, normalizeReferences } from './reference-roles.js'
 import * as feedback from './feedback.js'
+import { OVERLAY_POSITIONS, OVERLAY_DEFAULTS, normalizeOverlay } from './overlay.js'
+import { roleOf } from './reference-roles.js'
 import { log, mask } from './log.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -80,6 +82,7 @@ export function createApp({ token, port }) {
       spend: { credits30d: creditsLast30Days(), limit: cfg.monthlyLimitCredits },
       styles: stylesStore.listStyles(),
       referenceRoles: REFERENCE_ROLES,
+      overlay: { positions: OVERLAY_POSITIONS, defaults: OVERLAY_DEFAULTS },
       feedbackTags: { issues: feedback.ISSUE_TAGS, praise: feedback.PRAISE_TAGS },
       feedback: feedback.listFeedback().slice(0, 500),
       chipCatalog: {
@@ -176,7 +179,15 @@ export function createApp({ token, port }) {
     // Referencje: najpierw te wybrane przez użytkownika (z rolami), potem stałe
     // referencje stylu jako inspiracja. Stylowe są opcjonalne — skasowany pin
     // ich nie blokuje.
-    const chosen = normalizeReferences(references)
+    const all = normalizeReferences(references)
+    // Nakładki nie idą do modelu: zostają na dysku i wchodzą po pobraniu.
+    const overlays = []
+    for (const r of all.filter((r) => roleOf(r.role)?.overlay)) {
+      const found = boards.getPin(r.pinId)
+      if (!found) return { error: 'Plik logo do nakładki zniknął z tablicy.', status: 400 }
+      overlays.push({ pinId: r.pinId, file: found.pin.file, ...normalizeOverlay(r.overlay || {}) })
+    }
+    const chosen = all.filter((r) => !roleOf(r.role)?.overlay)
     const chosenIds = new Set(chosen.map((r) => r.pinId))
     const styleRefs = (style?.referencePinIds || []).filter((id) => !chosenIds.has(id))
       .map((pinId) => ({ pinId, role: 'inspiracja', note: '', fromStyle: true }))
@@ -207,7 +218,7 @@ export function createApp({ token, port }) {
     }
 
     // Prompt składa się DOKŁADNIE tak samo jak w „Pokaż pełny prompt”.
-    finalValues.prompt = composePrompt({ userPrompt, references: usedRefs, style })
+    finalValues.prompt = composePrompt({ userPrompt, references: usedRefs, overlays, style })
 
     const check = validateValues(manifest, finalValues)
     if (!check.ok) return { error: check.errors.join(' '), status: 400 }
@@ -229,6 +240,7 @@ export function createApp({ token, port }) {
       values: finalValues,
       calibration: cfg.calibration,
       references: usedRefs.map((r) => ({ pinId: r.pinId, role: r.role, note: r.note, fromStyle: Boolean(r.fromStyle) })),
+      overlays,
       styleId: style?.id || null,
       styleName: style?.name || null,
       userPrompt,
@@ -293,7 +305,10 @@ export function createApp({ token, port }) {
     const result = await startGeneration({
       modelId: job.modelId,
       values: { ...job.values, prompt: job.userPrompt ?? job.values?.prompt, count: 1 },
-      references: (job.references || []).filter((r) => !r.fromStyle),
+      references: [
+        ...(job.references || []).filter((r) => !r.fromStyle),
+        ...(job.overlays || []).map((o) => ({ pinId: o.pinId, role: 'logo-nakladka', overlay: o })),
+      ],
       styleId: job.styleId || undefined,
     })
     if (result.error) return c.json({ error: result.error }, result.status)
@@ -337,17 +352,19 @@ export function createApp({ token, port }) {
 
     // Poprzedni wynik staje się pinem (tablica „Moje pliki”), żeby móc być referencją.
     const board = boards.uploadsBoard()
-    const { pin } = boards.addPin(board.id, { bytes: fs.readFileSync(job.files[0]), name: `wersja-${job.id.slice(0, 8)}.png`, note: 'poprzednia wersja do poprawki' })
+    const baseFile = job.rawFiles?.[0] && fs.existsSync(job.rawFiles[0]) ? job.rawFiles[0] : job.files[0]
+    const { pin } = boards.addPin(board.id, { bytes: fs.readFileSync(baseFile), name: `wersja-${job.id.slice(0, 8)}.png`, note: 'poprzednia wersja do poprawki' })
 
     const model = models.find((m) => m.id === job.modelId)
     const targetModel = model?.refs?.max > 0 ? model : editingCounterpart(model)
     if (!targetModel) return c.json({ error: 'Nie ma modelu, który przyjmuje obrazy.' }, 400)
 
     const previousRefs = (job.references || []).filter((r) => !r.fromStyle && r.pinId !== pin.id)
+    const previousOverlays = (job.overlays || []).map((o) => ({ pinId: o.pinId, role: 'logo-nakladka', overlay: o }))
     const result = await startGeneration({
       modelId: targetModel.id,
       values: { ...job.values, prompt: `${job.userPrompt ?? job.values?.prompt}\n\n${correction}`, count: 1 },
-      references: [{ pinId: pin.id, role: 'edycja', note: '' }, ...previousRefs],
+      references: [{ pinId: pin.id, role: 'edycja', note: '' }, ...previousRefs, ...previousOverlays],
       styleId: job.styleId || undefined,
       variantOf: job.id,
       correction,
@@ -386,6 +403,7 @@ export function createApp({ token, port }) {
       if (!resolved.startsWith(path.resolve(LIBRARY_DIR) + path.sep)) continue
       fs.rmSync(resolved, { force: true })
       fs.rmSync(resolved.replace(/\.[a-z0-9]+$/i, '.json'), { force: true })
+      fs.rmSync(resolved.replace(/\.([a-z0-9]+)$/i, '-raw.$1'), { force: true })
     }
     if (!feedback.feedbackFor(job.id)) {
       feedback.saveFeedback({ jobId: job.id, verdict: 'bad', tags: [], text: '' }, { implicit: 'deleted', styleId: job.styleId, modelId: job.modelId })
@@ -518,7 +536,9 @@ export function createApp({ token, port }) {
     const style = styleId ? stylesStore.getStyle(styleId) : null
     const manifest = models.find((m) => m.id === modelId)
     const acceptsImages = manifest ? manifest.refs?.max > 0 : true
-    const chosen = normalizeReferences(references)
+    const allRefs = normalizeReferences(references)
+    const overlays = allRefs.filter((r) => roleOf(r.role)?.overlay).map((r) => normalizeOverlay(r.overlay || {}))
+    const chosen = allRefs.filter((r) => !roleOf(r.role)?.overlay)
     const chosenIds = new Set(chosen.map((r) => r.pinId))
     const styleRefs = acceptsImages
       ? (style?.referencePinIds || []).filter((id) => !chosenIds.has(id) && boards.getPin(id)).map((pinId) => ({ pinId, role: 'inspiracja', note: '' }))
@@ -526,7 +546,7 @@ export function createApp({ token, port }) {
     const all = acceptsImages ? [...chosen, ...styleRefs] : []
     const limit = manifest?.refs?.max || all.length
     return c.json({
-      prompt: composePrompt({ userPrompt: prompt, references: all.slice(0, limit), style }),
+      prompt: composePrompt({ userPrompt: prompt, references: all.slice(0, limit), overlays, style }),
       styleName: style?.name || null,
       referenceCount: Math.min(all.length, limit),
     })

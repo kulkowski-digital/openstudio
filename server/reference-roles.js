@@ -29,6 +29,13 @@ export const REFERENCE_ROLES = [
     prompt: 'Logo: wstaw je dokładnie raz, bez żadnych zmian kształtu, kolorów i proporcji, czytelnie i w naturalnym miejscu; nigdzie indziej nie powtarzaj jego kształtów ani nie używaj go jako tekstury tła.',
   },
   {
+    value: 'logo-nakladka',
+    label: 'logo (nakładka)',
+    hint: 'nie idzie do modelu — nakładamy oryginał po generacji',
+    overlay: true,
+    prompt: null,
+  },
+  {
     value: 'tlo',
     label: 'tło',
     hint: 'użyj jako tła sceny',
@@ -67,7 +74,9 @@ export function normalizeReferences(input) {
     if (!ref || typeof ref.pinId !== 'string' || seen.has(ref.pinId)) continue
     seen.add(ref.pinId)
     const role = roleOf(ref.role) ? ref.role : DEFAULT_ROLE
-    out.push({ pinId: ref.pinId, role, note: String(ref.note || '').trim().slice(0, 300) })
+    const entry = { pinId: ref.pinId, role, note: String(ref.note || '').trim().slice(0, 300) }
+    if (ref.overlay && typeof ref.overlay === 'object') entry.overlay = ref.overlay
+    out.push(entry)
   }
   return out
 }
@@ -77,6 +86,7 @@ export function normalizeReferences(input) {
  * `input_urls`, bo model rozpoznaje obrazy po kolejności, nie po nazwie.
  */
 export function describeReferences(refs = []) {
+  refs = refs.filter((r) => !roleOf(r.role)?.overlay)   // nakładki nie są obrazami dla modelu
   if (!refs.length) return ''
   const lines = refs.map((ref, i) => {
     const role = roleOf(ref.role)

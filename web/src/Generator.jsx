@@ -7,7 +7,7 @@ import { Alert, Badge, Card, Spinner, credits } from './ui.jsx'
 /** Ekran generowania: wybór modelu, obrazy z rolami, formularz z manifestu, cena na przycisku. */
 export default function Generator({
   models, calibrationTick, onQueued, refs = [], onRefsChange, preferredModelId,
-  styles = [], styleId, onStyleChange, roles = [], boards = [],
+  styles = [], styleId, onStyleChange, roles = [], boards = [], overlay,
 }) {
   const [modelId, setModelId] = useState(() => preferredModelId || (models.find((m) => m.recommended && m.kind === 't2i') || models[0])?.id)
   const model = models.find((m) => m.id === modelId)
@@ -60,8 +60,14 @@ export default function Generator({
 
   const maxRefs = model?.refs?.max ?? 0
   const acceptsImages = maxRefs > 0
-  const usedRefs = refs.slice(0, maxRefs)
-  const refPayload = usedRefs.map((r) => ({ pinId: r.pin.id, role: r.role, note: r.note }))
+  const isOverlay = (r) => roles.find((x) => x.value === r.role)?.overlay
+  const overlayRefs = refs.filter(isOverlay)
+  const modelRefs = refs.filter((r) => !isOverlay(r))
+  const usedRefs = modelRefs.slice(0, maxRefs)
+  const refPayload = [
+    ...usedRefs.map((r) => ({ pinId: r.pin.id, role: r.role, note: r.note })),
+    ...overlayRefs.map((r) => ({ pinId: r.pin.id, role: r.role, overlay: r.overlay || overlay?.defaults })),
+  ]
   const styleRefsAlive = (style?.referencePinIds || []).filter((id) => boards.some((b) => b.pins.some((p) => p.id === id)) && !usedRefs.some((r) => r.pin.id === id))
   const styleRefsCount = acceptsImages ? Math.max(0, Math.min(styleRefsAlive.length, maxRefs - usedRefs.length)) : 0
 
@@ -98,7 +104,7 @@ export default function Generator({
     setError(null)
     setNote(null)
     try {
-      const res = await api.generate(model.id, values, acceptsImages ? refPayload : undefined, styleId || undefined)
+      const res = await api.generate(model.id, values, acceptsImages ? refPayload : refPayload.filter((r) => roles.find((x) => x.value === r.role)?.overlay), styleId || undefined)
       if (res.note) setNote(res.note)
       onQueued(res.jobs, res.note)
     } catch (err) {
@@ -170,14 +176,14 @@ export default function Generator({
             </div>
           )}
 
-          {acceptsImages ? (
-            <References refs={refs} onChange={onRefsChange} roles={roles} maxRefs={maxRefs} styleRefsCount={styleRefsCount} disabled={busy} />
-          ) : refs.length > 0 && (
+          {!acceptsImages && modelRefs.length > 0 && (
             <Alert kind="warn">
-              Masz {refs.length === 1 ? 'wybrany obraz' : `wybrane ${refs.length} obrazy`}, ale ten model pracuje tylko z tekstu.
+              Masz {modelRefs.length === 1 ? 'wybrany obraz' : `wybrane ${modelRefs.length} obrazy`}, ale ten model pracuje tylko z tekstu (nakładki logo działają).
               {i2iModel && <> <button onClick={() => setModelId(i2iModel.id)} className="underline">Przełącz na {i2iModel.title}</button>, żeby ich użyć.</>}
             </Alert>
           )}
+          <References refs={refs} onChange={onRefsChange} roles={roles} maxRefs={maxRefs} styleRefsCount={styleRefsCount}
+            disabled={busy} overlay={overlay} acceptsImages={acceptsImages} />
 
           {basic.map((f) => (
             <Field key={f.name} field={f} value={values[f.name]} onChange={(v) => setValues((s) => ({ ...s, [f.name]: v }))} disabled={busy} />

@@ -34,7 +34,7 @@ test('własna instrukcja idzie dosłownie, bez naszego szablonu', () => {
 
 test('każda rola poza „własną” ma gotowe zdanie dla modelu', () => {
   for (const role of REFERENCE_ROLES) {
-    if (role.value === 'wlasne') continue
+    if (role.value === 'wlasne' || role.overlay) continue   // nakładka nie jest obrazem dla modelu
     assert.ok(role.prompt && role.prompt.length > 20, `rola ${role.value} bez zdania`)
   }
 })

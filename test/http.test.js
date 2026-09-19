@@ -627,3 +627,36 @@ test('przypięcie wyniku do tablicy zapisuje niejawne „dobre”', async () => 
   assert.ok(fb, 'brak niejawnej oceny')
   assert.equal(fb.implicit, 'pinned')
 })
+
+// ── Logo jako nakładka ─────────────────────────────────────────────────────
+
+test('logo (nakładka) działa z modelem z tekstu: nie idzie do modelu, prompt prosi o wolne miejsce, plik dostaje nakładkę', async () => {
+  const logoPng = (await import('../server/overlay.js')).encodePng({ width: 4, height: 2, data: Buffer.alloc(32, 255) })
+  const { pin: logo } = await (await call('/api/uploads', { method: 'POST', body: JSON.stringify({ base64: logoPng.toString('base64'), name: 'logo.png' }) })).json()
+
+  const uploadsBefore = state.uploads
+  const preview = await (await call('/api/prompt-preview', {
+    method: 'POST',
+    body: JSON.stringify({ prompt: 'plakat', modelId: 'gpt-image-2-5-flare-text-to-image', references: [{ pinId: logo.id, role: 'logo-nakladka', overlay: { position: 'prawy-gora', widthPct: 20 } }] }),
+  })).json()
+  assert.match(preview.prompt, /Zostaw wolne, czyste miejsce w prawym górnym rogu/)
+  assert.ok(!/Załączon/.test(preview.prompt), 'nakładka nie jest obrazem dla modelu')
+
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-text-to-image', values: { prompt: 'plakat', resolution: '1K', count: 1 }, references: [{ pinId: logo.id, role: 'logo-nakladka', overlay: { position: 'prawy-gora', widthPct: 20 } }] }),
+  })
+  assert.equal(res.status, 200, 'model z tekstu musi przyjąć nakładkę')
+  const { jobs } = await res.json()
+  assert.equal(state.uploads, uploadsBefore, 'logo do nakładki nie jest wysyłane do dostawcy')
+  assert.equal(jobs[0].overlays.length, 1)
+  assert.equal(jobs[0].input.input_urls, undefined)
+
+  await waitFor(() => readJobs().find((j) => j.id === jobs[0].id)?.status === 'done', 15000)
+  assert.equal(state.lastInput.prompt, preview.prompt, 'podgląd i wysyłka identyczne')
+  const job = readJobs().find((j) => j.id === jobs[0].id)
+  assert.ok(job.rawFiles?.[0] && fs.existsSync(job.rawFiles[0]), 'oryginał bez logo zostaje obok')
+  assert.ok(fs.existsSync(job.files[0]))
+  assert.equal(job.overlayPlaced.length, 1)
+  assert.equal(job.overlayError, undefined)
+})
