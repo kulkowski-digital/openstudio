@@ -26,7 +26,7 @@ export const REFERENCE_ROLES = [
     value: 'logo',
     label: 'logo',
     hint: 'wstaw bez zmian, czytelnie',
-    prompt: 'Logo: wstaw je bez żadnych zmian kształtu, kolorów i proporcji, czytelnie i w naturalnym miejscu.',
+    prompt: 'Logo: wstaw je dokładnie raz, bez żadnych zmian kształtu, kolorów i proporcji, czytelnie i w naturalnym miejscu; nigdzie indziej nie powtarzaj jego kształtów ani nie używaj go jako tekstury tła.',
   },
   {
     value: 'tlo',
