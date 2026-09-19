@@ -46,3 +46,6 @@ W generatorze, przy modelu „z inspiracji”, jest panel **Obrazy do tej genera
 
 ### Model zignorował moje logo / zmienił twarz
 Sprawdź „pokaż pełny prompt”: czy obraz ma właściwą rolę i numer. Modele obrazu bywają uparte — pomaga krótsza lista obrazów (2–3 zamiast 8), dopisanie uwagi przy roli („logo w prawym dolnym rogu, małe”) i wariant Sunburst, który precyzyjniej trzyma się instrukcji.
+
+### Klikam „dodaj własny plik" / „dodaj pliki" i okno wyboru się nie otwiera
+Najczęstsza przyczyna: kartą steruje rozszerzenie automatyzujące przeglądarkę (np. Claude in Chrome, DevTools z podłączonym debuggerem) — ono przechwytuje systemowe okna wyboru plików. Otwórz aplikację w zwykłej karcie bez rozszerzenia, albo dodaj obraz inaczej: przeciągnij plik z Findera/Eksploratora, wklej go `Cmd/Ctrl+V` albo wklej link do obrazka.

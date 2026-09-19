@@ -498,7 +498,7 @@ export function createApp({ token, port }) {
     }
     let html = fs.readFileSync(index, 'utf8')
     if (isAddressBarVisit(c)) html = injectToken(html, token)
-    return c.html(html, 200, FRAME_GUARD)
+    return c.html(html, 200, { ...FRAME_GUARD, 'Cache-Control': 'no-cache' })
   })
 
   async function withStyleErrors(c, fn) {

@@ -12,6 +12,7 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
   const [busy, setBusy] = useState(0)
   const [error, setError] = useState(null)
   const [dragging, setDragging] = useState(false)
+  const [link, setLink] = useState('')
 
   const used = refs.slice(0, maxRefs)
   const extra = refs.slice(maxRefs)
@@ -144,6 +145,18 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
           })}
         </ol>
       )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input value={link} onChange={(e) => setLink(e.target.value)} disabled={disabled}
+          onKeyDown={(e) => { if (e.key === 'Enter' && link.trim()) { addUrl(link.trim()); setLink('') } }}
+          placeholder="albo wklej link do obrazka" id="ref-url" name="ref-url"
+          className="flex-1 min-w-48 rounded-lg bg-panel-2 border border-line px-3 py-1.5 text-xs" />
+        <button type="button" disabled={disabled || !link.trim()} onClick={() => { addUrl(link.trim()); setLink('') }}
+          className="text-xs text-cyan underline disabled:opacity-40">dodaj z linku</button>
+        <span className="text-[11px] text-muted">
+          Okno wyboru pliku się nie otwiera? Tak bywa, gdy kartą steruje rozszerzenie (np. Claude in Chrome) — wtedy przeciągnij plik z Findera albo wklej go <span className="font-mono">Cmd/Ctrl+V</span>.
+        </span>
+      </div>
 
       {extra.length > 0 && (
         <p className="text-xs text-orange leading-relaxed">

@@ -108,3 +108,18 @@ npm start
 ## Licencja i zastrzeżenia
 
 MIT. Projekt **niezależny**, niepowiązany z Kie.ai ani z żadnym dostawcą modeli. Płacisz bezpośrednio dostawcy, na jego warunkach; moderacja treści jest po jego stronie. Inspiracje na tablicach to Twoja odpowiedzialność — inspiruj się stylem, nie kopiuj cudzych prac.
+
+---
+
+## English summary
+
+**OpenStudio is a local, open-source image studio that runs on your own API key.** No subscription, no wasted credits, no account on yet another service: you paste a [Kie.ai](https://kie.ai/api-key) key, generate with GPT Image 2.5, and every file stays on your disk (`~/OpenStudio/`).
+
+- **Price before you click** — calibrated from the real `creditsConsumed` returned by the API; optional 30-day spending cap enforced *before* anything is sent.
+- **Boards** — a Pinterest-like moodboard. Drop files, paste from clipboard, drag from another tab or paste a URL; select 3–4 pins and hit *generate in this vibe*. Pins are uploaded lazily, only when used, once per file.
+- **Your own images with roles** — add your photo, logo or product and tell the model what to do with each one (*person*, *logo*, *product*, *background*, *edit this*, custom). The prompt gets a numbered list in the same order the model receives the images. *Show full prompt* always displays exactly what is sent.
+- **Styles** — a saved "look recipe": palette extracted in the browser (no API), chip-based description, things to avoid, strength. Export as `.styl.json`.
+- **Safe by design** — binds to `127.0.0.1` only, session token, Host/Origin checks, key stored with `0600`, never logged; `createTask` is never retried automatically (no idempotency key upstream → double charge).
+- **Beginner-friendly** — `npx openstudio`, zero native dependencies, and a `CLAUDE.md`/`AGENTS.md` so an AI agent can install and troubleshoot it for you: clone, open in Claude Code, type *run*.
+
+The UI is in Polish for now; the code, manifests and docs structure are ready for localisation. Unofficial project, not affiliated with Kie.ai.
