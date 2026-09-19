@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { CONFIG_FILE, JOBS_FILE, LEDGER_FILE, BOARDS_FILE, UPLOADS_FILE, ensureDataDir } from './paths.js'
+import { CONFIG_FILE, JOBS_FILE, LEDGER_FILE, BOARDS_FILE, UPLOADS_FILE, STYLES_FILE, ensureDataDir } from './paths.js'
 import { registerSecret, mask } from './log.js'
 
 const SCHEMA_VERSION = 1
@@ -156,4 +156,15 @@ export function forgetUpload(hash) {
   const uploads = readUploads()
   delete uploads[hash]
   writeJson(UPLOADS_FILE, { schemaVersion: SCHEMA_VERSION, uploads })
+}
+
+// ── Style (zapisany przepis na wygląd) ─────────────────────────────────────
+export function readStyles() {
+  const data = readJson(STYLES_FILE, { schemaVersion: SCHEMA_VERSION, styles: [] })
+  return Array.isArray(data.styles) ? data.styles : []
+}
+
+export function writeStyles(styles) {
+  writeJson(STYLES_FILE, { schemaVersion: SCHEMA_VERSION, styles })
+  return styles
 }

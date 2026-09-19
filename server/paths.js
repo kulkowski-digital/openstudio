@@ -14,6 +14,7 @@ export const LIBRARY_DIR = path.join(DATA_DIR, 'library')
 export const BOARDS_DIR = path.join(DATA_DIR, 'boards')
 export const BOARDS_FILE = path.join(DATA_DIR, 'boards.json')
 export const UPLOADS_FILE = path.join(DATA_DIR, 'uploads.json')
+export const STYLES_FILE = path.join(DATA_DIR, 'styles.json')
 
 export function ensureDataDir() {
   fs.mkdirSync(LIBRARY_DIR, { recursive: true })

@@ -328,3 +328,110 @@ test('żądanie bez nagłówków Sec-Fetch (curl, skrypt) też nie dostaje token
   const html = await res.text()
   assert.ok(!html.includes('__OPENSTUDIO_TOKEN__'))
 })
+
+// ── Style ──────────────────────────────────────────────────────────────────
+
+const STYL = {
+  name: 'Kulkowski Digital',
+  palette: ['#06070D', '#37E7F5', '#FF4D9D'],
+  chips: { kind: 'plakat', light: 'neon', mood: 'minimalistyczny' },
+  avoid: ['ludzie'],
+  strength: 'wyrazny',
+}
+
+test('katalog chipów jedzie razem ze stanem aplikacji', async () => {
+  const body = await (await call('/api/state')).json()
+  assert.ok(body.chipCatalog.groups.length >= 4)
+  assert.ok(body.chipCatalog.avoid.length >= 4)
+  assert.equal(body.chipCatalog.maxReferences, 8)
+})
+
+test('„Pokaż pełny prompt” zwraca dokładnie to, co pojedzie do modelu', async () => {
+  const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify(STYL) })).json()
+  const preview = await (await call('/api/prompt-preview', { method: 'POST', body: JSON.stringify({ prompt: 'okładka odcinka', styleId: style.id }) })).json()
+  assert.match(preview.prompt, /^okładka odcinka/)
+  assert.match(preview.prompt, /grafika plakatowa, neonowe światło/)
+  assert.equal(preview.styleName, 'Kulkowski Digital')
+
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-text-to-image', values: { prompt: 'okładka odcinka', resolution: '1K', count: 1 }, styleId: style.id }),
+  })
+  assert.equal(res.status, 200)
+  const { jobs } = await res.json()
+  await waitFor(() => readJobs().find((j) => j.id === jobs[0].id)?.status === 'done', 15000)
+
+  // to, co poszło do API, musi się zgadzać ze zapowiedzią co do znaku
+  assert.equal(state.lastInput.prompt, preview.prompt)
+  const job = readJobs().find((j) => j.id === jobs[0].id)
+  assert.equal(job.userPrompt, 'okładka odcinka')
+  assert.equal(job.styleName, 'Kulkowski Digital')
+})
+
+test('referencje stylu dokładają się do inspiracji wybranych ręcznie', async () => {
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const stylePin = (await (await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ base64: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(32, 21)]).toString('base64'), name: 'styl-ref.png' }) })).json()).pin
+  const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Z referencją', referencePinIds: [stylePin.id] }) })).json()
+
+  const recznie = (await (await call('/api/boards')).json()).boards[0].pins.find((p) => p.id !== stylePin.id)
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({
+      modelId: 'gpt-image-2-5-flare-image-to-image',
+      values: { prompt: 'w tym klimacie', resolution: '1K', count: 1 },
+      pinIds: [recznie.id],
+      styleId: style.id,
+    }),
+  })
+  assert.equal(res.status, 200)
+  const { jobs } = await res.json()
+  assert.equal(jobs[0].pinIds.length, 2, 'pin stylu musi dojechać razem z ręcznie wybranym')
+  assert.equal(jobs[0].pinIds[0], recznie.id, 'ręczny wybór ma pierwszeństwo przy limicie modelu')
+})
+
+test('eksport stylu daje plik do wysłania, import robi z niego własny styl', async () => {
+  const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Do wysłania' }) })).json()
+  const res = await call(`/api/styles/${style.id}/export`)
+  assert.match(res.headers.get('content-disposition'), /do-wyslania\.styl\.json/)
+  const file = await res.json()
+  assert.equal(file.id, undefined)
+
+  const imported = await (await call('/api/styles/import', { method: 'POST', body: JSON.stringify(file) })).json()
+  assert.equal(imported.style.name, 'Do wysłania')
+  assert.notEqual(imported.style.id, style.id)
+})
+
+test('generacja ze skasowanym stylem nie idzie do API', async () => {
+  const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Do skasowania' }) })).json()
+  await call(`/api/styles/${style.id}`, { method: 'DELETE' })
+  const before = state.submits
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-text-to-image', values: { prompt: 'x', resolution: '1K', count: 1 }, styleId: style.id }),
+  })
+  assert.equal(res.status, 400)
+  assert.equal(state.submits, before)
+})
+
+test('styl z referencjami działa też z modelem „z tekstu” (referencje pomijamy, nie blokujemy)', async () => {
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const pin = board.pins[0]
+  const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Z refami', referencePinIds: [pin.id] }) })).json()
+
+  const uploadsBefore = state.uploads
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-text-to-image', values: { prompt: 'kot', resolution: '1K', count: 1 }, styleId: style.id }),
+  })
+  assert.equal(res.status, 200, 'model z tekstu nie może odrzucać stylu z referencjami')
+  const body = await res.json()
+  assert.match(body.note, /pominięta/)
+  assert.equal(state.uploads, uploadsBefore, 'pominiętych referencji nie wysyłamy do dostawcy')
+
+  // ręczny wybór inspiracji przy modelu z tekstu to nadal błąd
+  const zRecznymi = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-text-to-image', values: { prompt: 'kot', resolution: '1K', count: 1 }, pinIds: [pin.id], styleId: style.id }),
+  })
+  assert.equal(zRecznymi.status, 400)
+})

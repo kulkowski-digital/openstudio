@@ -4,12 +4,14 @@ import KeyGate from './KeyGate.jsx'
 import Generator from './Generator.jsx'
 import Jobs from './Jobs.jsx'
 import Boards from './Boards.jsx'
+import Styles from './Styles.jsx'
 import Settings from './Settings.jsx'
 import { Alert, Spinner, credits } from './ui.jsx'
 
 const TABS = [
   { id: 'generate', label: 'generuj' },
   { id: 'boards', label: 'tablice' },
+  { id: 'styles', label: 'style' },
   { id: 'library', label: 'biblioteka' },
   { id: 'settings', label: 'ustawienia' },
 ]
@@ -22,6 +24,7 @@ export default function App() {
   const [calibrationTick, setCalibrationTick] = useState(0)
   const [pins, setPins] = useState([])            // inspiracje wybrane do najbliższej generacji
   const [preferredModelId, setPreferredModelId] = useState(null)
+  const [styleId, setStyleId] = useState(null)
   const [activeBoardId, setActiveBoardId] = useState(null)
   const [toast, setToast] = useState(null)
   const [offline, setOffline] = useState(false)
@@ -157,7 +160,20 @@ export default function App() {
             pins={pins}
             onPinsChange={setPins}
             preferredModelId={preferredModelId}
+            styles={state.styles || []}
+            styleId={styleId}
+            onStyleChange={setStyleId}
             onQueued={() => { setTab('library'); setPins([]); setPreferredModelId(null); load() }}
+          />
+        )}
+        {tab === 'styles' && (
+          <Styles
+            styles={state.styles || []}
+            catalog={state.chipCatalog}
+            boards={state.boards || []}
+            models={state.models}
+            onChanged={load}
+            onUse={(style) => { setStyleId(style.id); setTab('generate') }}
           />
         )}
         {tab === 'boards' && (

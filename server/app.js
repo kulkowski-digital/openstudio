@@ -13,6 +13,7 @@ import { Queue } from './queue.js'
 import { DATA_DIR, LIBRARY_DIR, SERVABLE_DIRS, ensureDataDir } from './paths.js'
 import * as boards from './boards.js'
 import { resolveReferences } from './references.js'
+import * as stylesStore from './styles.js'
 import { log, mask } from './log.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -74,6 +75,13 @@ export function createApp({ token, port }) {
       jobs: readJobs().slice(0, 100),
       boards: boards.listBoards(),
       spend: { credits30d: creditsLast30Days(), limit: cfg.monthlyLimitCredits },
+      styles: stylesStore.listStyles(),
+      chipCatalog: {
+        groups: stylesStore.CHIP_GROUPS,
+        avoid: stylesStore.AVOID_OPTIONS,
+        strengths: stylesStore.STRENGTHS,
+        maxReferences: stylesStore.MAX_REFERENCES,
+      },
       dataDir: DATA_DIR,
       manifestProblems: problems,
     })
@@ -134,27 +142,43 @@ export function createApp({ token, port }) {
   })
 
   app.post('/api/generate', async (c) => {
-    const { modelId, values, pinIds } = await c.req.json().catch(() => ({}))
+    const { modelId, values, pinIds, styleId } = await c.req.json().catch(() => ({}))
     const manifest = models.find((m) => m.id === modelId)
     if (!manifest) return c.json({ error: 'Nieznany model.' }, 400)
 
     const q = queue()
     if (!q) return c.json({ error: 'Najpierw dodaj klucz API.' }, 400)
 
+    const style = styleId ? stylesStore.getStyle(styleId) : null
+    if (styleId && !style) return c.json({ error: 'Wybrany styl już nie istnieje.' }, 400)
+
     // Inspiracje z tablicy jadą do dostawcy dopiero teraz — i tylko te wybrane.
     let refs = null
     const finalValues = { ...(values || {}) }
-    if (Array.isArray(pinIds) && pinIds.length > 0) {
-      if (manifest.refs?.max > 0) {
-        try {
-          refs = await resolveReferences(provider(), pinIds, { limit: manifest.refs.max })
-          finalValues.input_urls = refs.urls
-        } catch (err) {
-          return c.json({ error: err.human || err.message }, 400)
-        }
-      } else {
+    const userPrompt = finalValues.prompt
+    finalValues.prompt = stylesStore.buildPrompt(userPrompt, style)
+
+    // Referencje stylu jadą z każdą generacją; wybrane ręcznie mają pierwszeństwo.
+    const chosenPins = Array.isArray(pinIds) ? pinIds : []
+    const styleRefs = style?.referencePinIds || []
+    const allPins = [...new Set([...chosenPins, ...styleRefs])]
+    let ignoredStyleRefs = 0
+
+    if (manifest.refs?.max > 0 && allPins.length > 0) {
+      try {
+        refs = await resolveReferences(provider(), allPins, { limit: manifest.refs.max })
+        finalValues.input_urls = refs.urls
+      } catch (err) {
+        return c.json({ error: err.human || err.message }, 400)
+      }
+    } else if (allPins.length > 0) {
+      // Model „z tekstu” nie weźmie obrazów. Wybór użytkownika to błąd, ale
+      // referencje doklejone przez styl po prostu pomijamy — styl ma działać
+      // z każdym modelem, a nie blokować połowę katalogu.
+      if (chosenPins.length > 0) {
         return c.json({ error: `Model „${manifest.title}” nie przyjmuje inspiracji — wybierz model „z inspiracji”.` }, 400)
       }
+      ignoredStyleRefs = styleRefs.length
     }
 
     const check = validateValues(manifest, finalValues)
@@ -171,8 +195,23 @@ export function createApp({ token, port }) {
       }
     }
 
-    const jobs = q.enqueue({ modelId, values: finalValues, calibration: cfg.calibration, pinIds: refs?.usedPinIds })
-    return c.json({ jobs, price, skippedPins: refs?.skippedPinIds || [] })
+    const jobs = q.enqueue({
+      modelId,
+      values: finalValues,
+      calibration: cfg.calibration,
+      pinIds: refs?.usedPinIds,
+      styleId: style?.id || null,
+      styleName: style?.name || null,
+      userPrompt,
+    })
+    return c.json({
+      jobs,
+      price,
+      skippedPins: refs?.skippedPinIds || [],
+      note: ignoredStyleRefs
+        ? `Ten model nie przyjmuje obrazów, więc ${ignoredStyleRefs === 1 ? 'referencja stylu została pominięta' : `${ignoredStyleRefs} referencje stylu zostały pominięte`}. Opis i paleta działają normalnie.`
+        : null,
+    })
   })
 
   // ── Zadania ──────────────────────────────────────────────────────────────
@@ -265,6 +304,38 @@ export function createApp({ token, port }) {
 
   app.delete('/api/pins/:id', (c) => withBoardErrors(c, () => boards.deletePin(c.req.param('id'))))
 
+  // ── Style (przepis na wygląd) ────────────────────────────────────────────
+  app.get('/api/styles', (c) => c.json({ styles: stylesStore.listStyles() }))
+
+  app.post('/api/styles', async (c) => {
+    const body = await c.req.json().catch(() => ({}))
+    return withStyleErrors(c, () => ({ style: stylesStore.saveStyle(body) }))
+  })
+
+  app.delete('/api/styles/:id', (c) => withStyleErrors(c, () => stylesStore.deleteStyle(c.req.param('id'))))
+
+  app.get('/api/styles/:id/export', (c) => {
+    const style = stylesStore.getStyle(c.req.param('id'))
+    if (!style) return c.json({ error: 'Nie ma takiego stylu.' }, 404)
+    const file = stylesStore.exportStyle(style)
+    return c.body(JSON.stringify(file, null, 2), 200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${stylesStore.styleFileName(style.name)}"`,
+    })
+  })
+
+  app.post('/api/styles/import', async (c) => {
+    const body = await c.req.json().catch(() => ({}))
+    return withStyleErrors(c, () => ({ style: stylesStore.importStyle(body) }))
+  })
+
+  /** „Pokaż pełny prompt” — to samo, co pojedzie do API. */
+  app.post('/api/prompt-preview', async (c) => {
+    const { prompt, styleId } = await c.req.json().catch(() => ({}))
+    const style = styleId ? stylesStore.getStyle(styleId) : null
+    return c.json({ prompt: stylesStore.buildPrompt(prompt, style), styleName: style?.name || null })
+  })
+
   // ── Biblioteka ───────────────────────────────────────────────────────────
   app.get('/api/library', (c) => c.json({ items: libraryItems(), dir: LIBRARY_DIR }))
 
@@ -324,6 +395,16 @@ export function createApp({ token, port }) {
     if (isAddressBarVisit(c)) html = injectToken(html, token)
     return c.html(html, 200, FRAME_GUARD)
   })
+
+  async function withStyleErrors(c, fn) {
+    try {
+      return c.json(await fn())
+    } catch (err) {
+      if (err instanceof stylesStore.StyleError) return c.json({ error: err.human }, 400)
+      log.error('Błąd stylu:', String(err))
+      return c.json({ error: 'Coś poszło nie tak przy stylu.' }, 500)
+    }
+  }
 
   /** Błędy tablic mają gotowy komunikat po polsku — nie zamieniamy ich w 500. */
   async function withBoardErrors(c, fn) {

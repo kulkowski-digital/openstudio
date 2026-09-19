@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "name": "Neonowy plakat",
+  "palette": [
+    "#06070D",
+    "#37E7F5",
+    "#FF4D9D",
+    "#FF8A3D"
+  ],
+  "chips": {
+    "kind": "plakat",
+    "light": "neon",
+    "framing": "centralnie",
+    "mood": "minimalistyczny"
+  },
+  "avoid": [
+    "ludzie",
+    "watermark"
+  ],
+  "extra": "dużo czarnej przestrzeni wokół, jeden mocny element w centrum",
+  "strength": "wyrazny",
+  "defaults": {
+    "modelId": "gpt-image-2-5-flare-text-to-image",
+    "aspect_ratio": "16:9",
+    "resolution": "1K"
+  },
+  "app": "openstudio"
+}

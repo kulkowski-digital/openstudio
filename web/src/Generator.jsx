@@ -4,7 +4,7 @@ import Field from './Field.jsx'
 import { Alert, Badge, Card, Spinner, credits } from './ui.jsx'
 
 /** Ekran generowania: wybór modelu, formularz z manifestu, cena na przycisku. */
-export default function Generator({ models, calibrationTick, onQueued, pins = [], onPinsChange, preferredModelId }) {
+export default function Generator({ models, calibrationTick, onQueued, pins = [], onPinsChange, preferredModelId, styles = [], styleId, onStyleChange }) {
   const usable = models
   const [modelId, setModelId] = useState(() => preferredModelId || (models.find((m) => m.recommended && m.kind === 't2i') || usable[0])?.id)
   const model = models.find((m) => m.id === modelId)
@@ -13,6 +13,9 @@ export default function Generator({ models, calibrationTick, onQueued, pins = []
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [fullPrompt, setFullPrompt] = useState(null)
+  const [showPrompt, setShowPrompt] = useState(false)
+  const style = styles.find((s) => s.id === styleId) || null
 
   useEffect(() => {
     setValues({ ...model?.defaults })
@@ -23,6 +26,27 @@ export default function Generator({ models, calibrationTick, onQueued, pins = []
   useEffect(() => {
     if (preferredModelId && preferredModelId !== modelId) setModelId(preferredModelId)
   }, [preferredModelId])
+
+  // Styl może mieć swoje domyślne ustawienia — wchodzą w momencie włączenia stylu.
+  useEffect(() => {
+    if (!style) return
+    const d = style.defaults || {}
+    if (d.modelId && models.some((m) => m.id === d.modelId)) setModelId(d.modelId)
+    setValues((v) => ({
+      ...v,
+      ...(d.aspect_ratio ? { aspect_ratio: d.aspect_ratio } : {}),
+      ...(d.resolution ? { resolution: d.resolution } : {}),
+    }))
+  }, [styleId])
+
+  // Podgląd pełnego promptu liczy serwer — dokładnie tym samym kodem, którym składa go do wysyłki.
+  useEffect(() => {
+    if (!showPrompt) return
+    const t = setTimeout(() => {
+      api.promptPreview(values.prompt || '', styleId || null).then((r) => setFullPrompt(r.prompt)).catch(() => setFullPrompt(null))
+    }, 250)
+    return () => clearTimeout(t)
+  }, [showPrompt, values.prompt, styleId])
 
   // Cena odświeża się 300 ms po ostatniej zmianie parametru.
   useEffect(() => {
@@ -47,7 +71,7 @@ export default function Generator({ models, calibrationTick, onQueued, pins = []
     setBusy(true)
     setError(null)
     try {
-      const res = await api.generate(model.id, values, needsPins ? usedPins.map((p) => p.id) : undefined)
+      const res = await api.generate(model.id, values, needsPins ? usedPins.map((p) => p.id) : undefined, styleId || undefined)
       onQueued(res.jobs)
     } catch (err) {
       setError(err.message)
@@ -90,6 +114,33 @@ export default function Generator({ models, calibrationTick, onQueued, pins = []
 
       <Card className="p-6">
         <div className="space-y-5">
+          <div className="flex flex-wrap items-center gap-3 pb-4 border-b border-line">
+            <span className="text-sm font-semibold">Styl</span>
+            <select
+              value={styleId || ''}
+              onChange={(e) => onStyleChange(e.target.value || null)}
+              className="rounded-xl bg-panel-2 border border-line px-3 py-2 text-sm">
+              <option value="">bez stylu</option>
+              {styles.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            {style?.palette?.length > 0 && (
+              <div className="flex rounded-md overflow-hidden h-5">
+                {style.palette.map((hex) => <div key={hex} className="w-5" style={{ background: hex }} />)}
+              </div>
+            )}
+            <button onClick={() => setShowPrompt((v) => !v)} className="ml-auto text-xs text-cyan underline">
+              {showPrompt ? 'ukryj pełny prompt' : 'pokaż pełny prompt'}
+            </button>
+          </div>
+
+          {showPrompt && (
+            <div>
+              <pre className="text-[11px] font-mono bg-panel-2 border border-line rounded-xl p-3 whitespace-pre-wrap leading-relaxed max-h-56 overflow-auto">
+                {fullPrompt || (values.prompt?.trim() ? '…' : '(najpierw napisz, co ma być na obrazie)')}
+              </pre>
+              <p className="text-[11px] text-muted mt-1">To dokładnie ten tekst pojedzie do modelu — nic nie dopisujemy po cichu.</p>
+            </div>
+          )}
           {needsPins && (
             <div>
               <div className="flex items-center justify-between mb-2">
