@@ -297,3 +297,34 @@ test('token sesji przeżywa restart aplikacji (otwarta karta nie umiera)', async
 
   assert.equal(publicConfig().sessionToken, undefined, 'token nie może iść do przeglądarki w stanie aplikacji')
 })
+
+// ── Wejście z paska adresu ─────────────────────────────────────────────────
+
+test('wejście z paska adresu dostaje token w stronie (goły adres po prostu działa)', async () => {
+  const res = await app.request(`http://127.0.0.1:${PORT}/`, {
+    headers: { host: `127.0.0.1:${PORT}`, 'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate', 'sec-fetch-site': 'none' },
+  })
+  assert.equal(res.status, 200)
+  const html = await res.text()
+  assert.match(html, /__OPENSTUDIO_TOKEN__/)
+  assert.ok(html.includes(TOKEN))
+  assert.equal(res.headers.get('x-frame-options'), 'DENY')
+})
+
+test('ta sama strona wczytana przez obcą witrynę NIE dostaje tokenu', async () => {
+  for (const headers of [
+    { 'sec-fetch-dest': 'iframe', 'sec-fetch-mode': 'navigate', 'sec-fetch-site': 'cross-site' },
+    { 'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate', 'sec-fetch-site': 'cross-site' },
+    { 'sec-fetch-dest': 'empty', 'sec-fetch-mode': 'cors', 'sec-fetch-site': 'cross-site' },
+  ]) {
+    const res = await app.request(`http://127.0.0.1:${PORT}/`, { headers: { host: `127.0.0.1:${PORT}`, ...headers } })
+    const html = await res.text()
+    assert.ok(!html.includes('__OPENSTUDIO_TOKEN__'), `token wyciekł przy ${JSON.stringify(headers)}`)
+  }
+})
+
+test('żądanie bez nagłówków Sec-Fetch (curl, skrypt) też nie dostaje tokenu', async () => {
+  const res = await app.request(`http://127.0.0.1:${PORT}/`, { headers: { host: `127.0.0.1:${PORT}` } })
+  const html = await res.text()
+  assert.ok(!html.includes('__OPENSTUDIO_TOKEN__'))
+})

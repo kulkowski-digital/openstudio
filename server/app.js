@@ -18,6 +18,9 @@ import { log, mask } from './log.js'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const WEB_DIST = path.join(HERE, '..', 'web', 'dist')
 
+/** Żadnego osadzania aplikacji w cudzej ramce — token jechałby razem z nią. */
+const FRAME_GUARD = { 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "frame-ancestors 'none'" }
+
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.json': 'application/json', '.ico': 'image/x-icon' }
 
 /** Buduje aplikację. Osobno od `listen`, żeby dało się ją testować bez portu. */
@@ -310,12 +313,16 @@ export function createApp({ token, port }) {
     const rel = url.pathname === '/' ? 'index.html' : url.pathname.slice(1)
     const file = path.resolve(WEB_DIST, rel)
     if (!file.startsWith(path.resolve(WEB_DIST))) return c.text('Nie znaleziono', 404)
-    if (fs.existsSync(file) && fs.statSync(file).isFile()) {
+    if (fs.existsSync(file) && fs.statSync(file).isFile() && path.extname(file) !== '.html') {
       return c.body(fs.readFileSync(file), 200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream' })
     }
     const index = path.join(WEB_DIST, 'index.html')
-    if (fs.existsSync(index)) return c.html(fs.readFileSync(index, 'utf8'))
-    return c.html('<h1>Brak zbudowanego interfejsu</h1><p>Uruchom <code>npm run build</code> w katalogu projektu.</p>', 200)
+    if (!fs.existsSync(index)) {
+      return c.html('<h1>Brak zbudowanego interfejsu</h1><p>Uruchom <code>npm run build</code> w katalogu projektu.</p>', 200)
+    }
+    let html = fs.readFileSync(index, 'utf8')
+    if (isAddressBarVisit(c)) html = injectToken(html, token)
+    return c.html(html, 200, FRAME_GUARD)
   })
 
   /** Błędy tablic mają gotowy komunikat po polsku — nie zamieniamy ich w 500. */
@@ -332,6 +339,30 @@ export function createApp({ token, port }) {
   app.queueRef = () => state.queue
   app.bootQueue = () => queue()
   return app
+}
+
+/**
+ * Czy to wejście z paska adresu albo z zakładki (a nie żądanie wywołane przez
+ * inną stronę)? Tylko wtedy wolno wstawić token do HTML-a, dzięki czemu
+ * `http://127.0.0.1:PORT/` działa bez doklejania `?t=…`.
+ *
+ * `Sec-Fetch-Site: none` ustawia sama przeglądarka i obca witryna nie może go
+ * podrobić — jej żądania mają `cross-site`. Ramki odpadają przez `Sec-Fetch-Dest`.
+ */
+export function isAddressBarVisit(c) {
+  const dest = c.req.header('sec-fetch-dest')
+  const site = c.req.header('sec-fetch-site')
+  const mode = c.req.header('sec-fetch-mode')
+  if (!dest && !site && !mode) return false        // stara przeglądarka albo curl — nie ryzykujemy
+  if (dest !== 'document') return false            // iframe, obrazek, fetch: nie
+  if (mode && mode !== 'navigate') return false
+  return site === 'none' || site === 'same-origin'
+}
+
+/** Wstawia token do strony jako zmienną, zanim ruszy aplikacja. */
+export function injectToken(html, token) {
+  const tag = `<script>window.__OPENSTUDIO_TOKEN__=${JSON.stringify(token)}</script>`
+  return html.includes('</head>') ? html.replace('</head>', `${tag}</head>`) : tag + html
 }
 
 /** Raport „Diagnostyka”: wszystko, co potrzebne do zgłoszenia, bez klucza API. */

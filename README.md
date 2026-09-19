@@ -22,6 +22,8 @@ W repo jest plik [`CLAUDE.md`](CLAUDE.md) (i bliźniaczy `AGENTS.md`), który m�
    ```
 3. Przeglądarka otworzy się sama. Wklej klucz API i generuj.
 
+Później wystarczy wejść na `http://127.0.0.1:4321` — adres możesz zapisać w zakładkach. Token dopisuje się sam, o ile wchodzisz z paska adresu tej samej przeglądarki.
+
 Paczka ma interfejs zbudowany z góry i **zero zależności wymagających kompilacji** — to najczęstszy powód, dla którego takie aplikacje „nie chcą się zainstalować” na Windowsie.
 
 ### 3. Chcę ikonkę na pulpicie
@@ -54,6 +56,7 @@ Aplikacja wydaje prawdziwe pieniądze, więc traktujemy ją poważnie:
 
 - nasłuchuje **wyłącznie na `127.0.0.1`** — nikt z Twojej sieci Wi-Fi się nie dobije,
 - API jest zamknięte bez **tokenu sesji** (ochrona przed złośliwą stroną otwartą w tej samej przeglądarce). Token leży w `config.json` obok klucza, więc restart aplikacji nie zabija otwartej karty; gdy link gdzieś wycieknie, unieważnisz go komendą `npx openstudio reset-token`,
+- token trafia do strony **tylko** przy wejściu z paska adresu lub z zakładki (`Sec-Fetch-Site: none`, nagłówek ustawiany przez przeglądarkę, którego obca witryna nie podrobi). Żądanie z cudzej strony, z ramki, z `fetch`-a i z `curl`-a tokenu nie dostaje — pilnują tego testy. Osadzanie w ramce jest zablokowane (`X-Frame-Options: DENY`),
 - sprawdzamy nagłówki `Host` i `Origin` (ochrona przed DNS rebinding),
 - klucz leży w `~/OpenStudio/config.json` z prawami `0600` i **nigdy** nie trafia do przeglądarki, logów ani raportu diagnostycznego — pilnuje tego automatyczny test,
 - `createTask` (POST) nie jest **nigdy** ponawiany automatycznie, bo dostawca nie ma klucza idempotencji, a podwójne wysłanie to podwójna opłata.
@@ -91,7 +94,7 @@ npx openstudio --help
 ```bash
 npm install && npm --prefix web install
 npm run build     # buduje interfejs do web/dist
-npm test          # 60 testów: adapter API, kolejka, tablice, bezpieczeństwo, redakcja klucza
+npm test          # 63 testy: adapter API, kolejka, tablice, bezpieczeństwo, redakcja klucza
 npm start
 ```
 

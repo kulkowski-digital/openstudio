@@ -2,12 +2,16 @@
  * Klient lokalnego API. Token sesji przychodzi w adresie (?t=…), zapamiętujemy
  * go tylko na czas karty — nigdy nie trafia na dysk przeglądarki na stałe.
  */
+// Token bierzemy (w tej kolejności) z adresu, ze strony podanej przez serwer
+// przy wejściu z paska adresu, albo z pamięci karty.
 const urlToken = new URLSearchParams(location.search).get('t')
-if (urlToken) {
-  sessionStorage.setItem('openstudio-token', urlToken)
-  history.replaceState({}, '', location.pathname)
+const injected = typeof window !== 'undefined' ? window.__OPENSTUDIO_TOKEN__ : null
+const token = urlToken || injected || sessionStorage.getItem('openstudio-token') || ''
+if (token) {
+  try { sessionStorage.setItem('openstudio-token', token) } catch { /* tryb prywatny */ }
 }
-export const TOKEN = sessionStorage.getItem('openstudio-token') || ''
+if (urlToken) history.replaceState({}, '', location.pathname)
+export const TOKEN = token
 
 export const OFFLINE_MESSAGE =
   'Aplikacja nie odpowiada. Sprawdź okno terminala, w którym uruchomiłeś OpenStudio — jeśli zostało zamknięte, uruchom aplikację ponownie i otwórz adres z tokenem.'
