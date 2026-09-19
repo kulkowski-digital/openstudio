@@ -31,3 +31,12 @@ Biblioteka czyta **z Twojego dysku**, nie z internetu. Sprawdź, czy pliki są w
 
 ### Instalacja się wysypuje
 Sprawdź `node --version` (potrzebne ≥ 20.11). Projekt nie ma zależności wymagających kompilacji, więc typowe błędy z `node-gyp` tu nie występują — jeśli je widzisz, instalujesz coś innego niż OpenStudio.
+
+### Włączyłem styl, a obrazy i tak wychodzą różne
+Sprawdź **„pokaż pełny prompt”** w generatorze — tam widać dokładnie to, co idzie do modelu. Jeśli styl ma tylko paletę bez opisu, trzyma kolory, ale nie kompozycję. Dołóż chipy (rodzaj, światło, kadr) i ustaw siłę stylu na „mocno”.
+
+### Styl ma referencje, ale wybrałem model „z tekstu”
+Modele „z tekstu” nie przyjmują obrazów, więc referencje stylu są wtedy pomijane — aplikacja mówi o tym po wysłaniu. Opis i paleta działają normalnie. Chcesz, żeby referencje jechały z każdą generacją? Wybierz model „z inspiracji”.
+
+### Kolory z palety nie zgadzają się co do odcienia
+Tak działają modele obrazu: kod koloru traktują jak wskazówkę, nie jak farbę z puszki. Paleta przesuwa całość w Twoją stronę. Jeśli potrzebujesz dokładnego koloru marki, popraw go później w edytorze graficznym.

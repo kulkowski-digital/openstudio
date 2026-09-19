@@ -435,3 +435,21 @@ test('styl z referencjami działa też z modelem „z tekstu” (referencje pomi
   })
   assert.equal(zRecznymi.status, 400)
 })
+
+test('domyślne ustawienia stylu uzupełniają tylko to, czego nie podał użytkownik', async () => {
+  const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Z domyślnymi', defaults: { aspect_ratio: '16:9', resolution: '2K' } }) })).json()
+
+  const bezWskazania = await (await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-text-to-image', values: { prompt: 'kot', count: 1 }, styleId: style.id }),
+  })).json()
+  assert.equal(bezWskazania.jobs[0].values.aspect_ratio, '16:9')
+  assert.equal(bezWskazania.jobs[0].values.resolution, '2K')
+
+  const zWyborem = await (await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-text-to-image', values: { prompt: 'kot', aspect_ratio: '1:1', resolution: '1K', count: 1 }, styleId: style.id }),
+  })).json()
+  assert.equal(zWyborem.jobs[0].values.aspect_ratio, '1:1', 'wybór użytkownika ma pierwszeństwo nad stylem')
+  assert.equal(zWyborem.jobs[0].values.resolution, '1K')
+})

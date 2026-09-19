@@ -158,6 +158,14 @@ export function createApp({ token, port }) {
     const userPrompt = finalValues.prompt
     finalValues.prompt = stylesStore.buildPrompt(userPrompt, style)
 
+    // Domyślne ustawienia stylu uzupełniają tylko to, czego nie podał użytkownik —
+    // dzięki temu styl działa tak samo z interfejsu i z własnego skryptu.
+    for (const key of ['aspect_ratio', 'resolution']) {
+      const fromStyle = style?.defaults?.[key]
+      const given = finalValues[key]
+      if (fromStyle && (given === undefined || given === null || given === '')) finalValues[key] = fromStyle
+    }
+
     // Referencje stylu jadą z każdą generacją; wybrane ręcznie mają pierwszeństwo.
     const chosenPins = Array.isArray(pinIds) ? pinIds : []
     const styleRefs = style?.referencePinIds || []

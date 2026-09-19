@@ -48,7 +48,12 @@ Zobacz [docs/JAK-ZDOBYC-KLUCZ.md](docs/JAK-ZDOBYC-KLUCZ.md). W skrócie: konto n
 - **Tablice** — moodboard jak Pinterest. Wrzucasz inspiracje (przeciągnięciem, `Cmd/Ctrl+V`, przeciągnięciem obrazka z innej karty albo linkiem), zaznaczasz 3–4 i klikasz **„generuj w tym klimacie”**. Gotowe obrazy wracają na tablicę przyciskiem „📌 Przypnij”, więc najlepsze wyniki stają się referencjami dla kolejnych.
   Inspiracje leżą na Twoim dysku. Do dostawcy trafiają **tylko te, których użyjesz w generacji**, i dopiero w momencie kliknięcia — raz na plik, z ważnością 20 godzin.
 
-W przygotowaniu: **Style** (zapisany przepis na wygląd marki: paleta, chipy opisujące styl, czego unikać).
+- **Style** — zapisany przepis na wygląd, włączany jednym kliknięciem przy każdej generacji. Paletę wyciągamy z Twoich inspiracji **lokalnie w przeglądarce** (bez API i bez kosztów), opis składasz z gotowych określeń po polsku zamiast pisać prompt, a „czego unikać” działa raz a dobrze. Przycisk **„pokaż pełny prompt”** zawsze pokazuje dokładnie to, co pojedzie do modelu.
+  Styl **wyeksportujesz do pliku `.styl.json`** i wyślesz komuś; gotowe style leżą w [`styles/`](styles/).
+
+  > Uczciwie: modele traktują kody kolorów orientacyjnie. Paleta przesuwa całość w Twoją stronę, ale nie zagwarantuje odcienia co do numeru.
+
+W przygotowaniu: wideo („Animuj" z biblioteki) i kolejni dostawcy modeli.
 
 ## Bezpieczeństwo
 
@@ -72,6 +77,7 @@ Zalecenie: załóż u dostawcy **osobny klucz** tylko dla tej aplikacji, żeby m
 ├─ ledger.json          ← ile kredytów poszło na co
 ├─ boards.json          ← tablice inspiracji
 ├─ uploads.json         ← które inspiracje są aktualnie wysłane do dostawcy
+├─ styles.json          ← Twoje style
 ├─ boards/<id>/         ← pliki inspiracji
 └─ library/2026-09/     ← obrazy + JSON z promptem obok każdego
 ```
