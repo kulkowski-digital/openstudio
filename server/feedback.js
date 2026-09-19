@@ -11,6 +11,7 @@ export const ISSUE_TAGS = [
   { value: 'napisy', label: 'napisy', fix: 'Napisy są błędne — popraw literówki i czytelność; tekst dokładnie taki, jak w opisie, i żaden inny.' },
   { value: 'osoba', label: 'twarz / osoba', fix: 'Twarz i sylwetka nie zgadzają się z referencją — odtwórz osobę wiernie, nie zmieniaj rysów.' },
   { value: 'za-duzo', label: 'za dużo elementów', fix: 'Za dużo elementów: uprość scenę, zostaw tylko to, co jest w opisie.' },
+  { value: 'artefakty', label: 'plamy / artefakty', fix: 'Usuń plamy, smugi, zacieki i przypadkowe kształty — tło ma być czyste i gładkie, bez tekstur; nie powtarzaj nigdzie kształtów z logo ani z referencji.' },
   { value: 'za-jasno', label: 'za jasno', fix: 'Za jasno — przyciemnij scenę, więcej cienia i ciemnego tła.' },
   { value: 'za-ciemno', label: 'za ciemno', fix: 'Za ciemno — rozjaśnij scenę, więcej światła na głównym elemencie.' },
   { value: 'referencje', label: 'nie trzyma referencji', fix: 'Wynik za bardzo odbiega od załączonych obrazów — trzymaj się ich wyraźnie bliżej.' },
