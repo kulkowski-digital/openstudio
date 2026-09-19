@@ -576,3 +576,54 @@ test('„Moje pliki” nie duplikuje się przy wielu wrzutach', async () => {
   const all = (await (await call('/api/boards')).json()).boards.filter((b) => b.system === 'uploads')
   assert.equal(all.length, 1)
 })
+
+// ── Feedback i „ponów z poprawką” ──────────────────────────────────────────
+
+test('ocena „dobre” zapisuje się przy zadaniu i w pliku obok obrazu', async () => {
+  const lib = (await (await call('/api/library')).json()).items
+  const job = lib[0]
+  const res = await call(`/api/jobs/${job.id}/feedback`, { method: 'POST', body: JSON.stringify({ verdict: 'good', tags: ['kolory', 'klimat'] }) })
+  assert.equal(res.status, 200)
+  const state = await (await call('/api/state')).json()
+  assert.ok(state.feedback.some((f) => f.jobId === job.id && f.verdict === 'good'))
+  const sidecar = JSON.parse(fs.readFileSync(job.files[0].replace(/\.png$/, '.json'), 'utf8'))
+  assert.equal(sidecar.feedback.verdict, 'good')
+})
+
+test('„ponów z poprawką”: poprzedni wynik jako obraz do edycji + uwagi w prompcie', async () => {
+  const lib = (await (await call('/api/library')).json()).items
+  const job = lib.find((j) => j.modelId === 'gpt-image-2-5-flare-text-to-image') || lib[0]
+  const res = await call(`/api/jobs/${job.id}/variant`, { method: 'POST', body: JSON.stringify({ tags: ['za-ciemno'], text: 'więcej niebieskiego' }) })
+  assert.equal(res.status, 200)
+  const { jobs } = await res.json()
+  const nowy = jobs[0]
+  assert.equal(nowy.variantOf, job.id)
+  assert.equal(nowy.modelId, 'gpt-image-2-5-flare-image-to-image', 'model z tekstu przełącza się na odpowiednik z obrazami')
+  assert.equal(nowy.references[0].role, 'edycja')
+  assert.match(nowy.values.prompt, /Poprawka względem poprzedniej wersji: .*rozjaśnij.*więcej niebieskiego\./)
+  assert.match(nowy.values.prompt, /Obraz wyjściowy: zmień w nim tylko to/)
+  assert.ok(nowy.input.input_urls.length >= 1)
+
+  const state = await (await call('/api/state')).json()
+  const fb = state.feedback.find((f) => f.jobId === job.id)
+  assert.equal(fb.verdict, 'bad')
+  assert.equal(fb.variantJobId, nowy.id)
+})
+
+test('wariant bez uwag jest odrzucany zanim cokolwiek pójdzie do API', async () => {
+  const lib = (await (await call('/api/library')).json()).items
+  const before = state.submits
+  const res = await call(`/api/jobs/${lib[0].id}/variant`, { method: 'POST', body: JSON.stringify({ tags: [], text: '' }) })
+  assert.equal(res.status, 400)
+  assert.equal(state.submits, before)
+})
+
+test('przypięcie wyniku do tablicy zapisuje niejawne „dobre”', async () => {
+  const lib = (await (await call('/api/library')).json()).items
+  const job = lib[lib.length - 1]
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ fromFile: job.files[0] }) })
+  const fb = (await (await call('/api/state')).json()).feedback.find((f) => f.jobId === job.id)
+  assert.ok(fb, 'brak niejawnej oceny')
+  assert.equal(fb.implicit, 'pinned')
+})

@@ -15,7 +15,7 @@ const STATUS = {
 
 const inProgress = (s) => ['queued', 'submitting', 'running', 'downloading'].includes(s)
 
-export default function Jobs({ jobs, onChange, boards = [], onPinned }) {
+export default function Jobs({ jobs, onChange, boards = [], onPinned, feedback = [], feedbackTags = { issues: [], praise: [] }, onVariant }) {
   const visible = jobs.filter((j) => j.status !== 'hidden')
   const active = visible.filter((j) => inProgress(j.status))
   const rest = visible.filter((j) => !inProgress(j.status))
@@ -34,7 +34,7 @@ export default function Jobs({ jobs, onChange, boards = [], onPinned }) {
         <div>
           <h2 className="h-display text-lg mb-3">w toku ({active.length})</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {active.map((j) => <JobTile key={j.id} job={j} onChange={onChange} boards={boards} onPinned={onPinned} />)}
+            {active.map((j) => <JobTile key={j.id} job={j} onChange={onChange} boards={boards} onPinned={onPinned} fb={feedback.find((f) => f.jobId === j.id)} tags={feedbackTags} onVariant={onVariant} />)}
           </div>
         </div>
       )}
@@ -44,18 +44,21 @@ export default function Jobs({ jobs, onChange, boards = [], onPinned }) {
           <button onClick={() => api.openFolder('library').catch(() => {})} className="text-xs text-cyan underline">otwórz folder</button>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {rest.map((j) => <JobTile key={j.id} job={j} onChange={onChange} boards={boards} onPinned={onPinned} />)}
+          {rest.map((j) => <JobTile key={j.id} job={j} onChange={onChange} boards={boards} onPinned={onPinned} fb={feedback.find((f) => f.jobId === j.id)} tags={feedbackTags} onVariant={onVariant} />)}
         </div>
       </div>
     </div>
   )
 }
 
-function JobTile({ job, onChange, boards = [], onPinned }) {
+function JobTile({ job, onChange, boards = [], onPinned, fb, tags, onVariant }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [pickingBoard, setPickingBoard] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [rating, setRating] = useState(null)       // null | 'good' | 'bad' — otwarty panel oceny
+  const [picked, setPicked] = useState([])
+  const [text, setText] = useState('')
   const status = STATUS[job.status] || { label: job.status, tone: 'default' }
 
   async function run(fn) {
@@ -97,6 +100,7 @@ function JobTile({ job, onChange, boards = [], onPinned }) {
         </div>
 
         <p className="text-xs text-muted line-clamp-3 leading-relaxed flex-1">{job.userPrompt ?? job.values?.prompt}</p>
+        {job.variantOf && <Badge tone="pink">poprawka do {job.variantOf.slice(0, 8)}</Badge>}
         {(job.styleName || job.references?.length > 0) && (
           <div className="flex flex-wrap gap-1.5">
             {job.styleName && <Badge tone="cyan">styl: {job.styleName}</Badge>}
@@ -106,6 +110,64 @@ function JobTile({ job, onChange, boards = [], onPinned }) {
 
         {job.error && <p className="text-[11px] text-pink leading-relaxed">{job.error}</p>}
         {error && <Alert kind="error">{error}</Alert>}
+
+        {job.status === 'done' && (
+          <div className="space-y-2">
+            {fb && rating === null && (
+              <div className="text-[11px] text-muted">
+                oceniono: <span className={fb.verdict === 'good' ? 'text-cyan' : 'text-pink'}>{fb.verdict === 'good' ? 'dobre' : 'do poprawy'}</span>
+                {fb.implicit && <span className="opacity-70"> (z {fb.implicit === 'pinned' ? 'przypięcia' : 'skasowania'})</span>}
+                {fb.tags?.length > 0 && <span className="opacity-70"> · {fb.tags.join(', ')}</span>}
+                {fb.variantJobId && <span className="opacity-70"> · zrobiono poprawkę</span>}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              <button disabled={busy} onClick={() => { setRating(rating === 'good' ? null : 'good'); setPicked([]) }}
+                className={`rounded-full border px-2 py-0.5 ${rating === 'good' ? 'border-cyan text-cyan' : 'border-line text-muted hover:text-ink'}`}>👍 dobre</button>
+              <button disabled={busy} onClick={() => { setRating(rating === 'bad' ? null : 'bad'); setPicked([]) }}
+                className={`rounded-full border px-2 py-0.5 ${rating === 'bad' ? 'border-pink text-pink' : 'border-line text-muted hover:text-ink'}`}>co poprawić?</button>
+            </div>
+            {rating && (
+              <div className="rounded-lg border border-line bg-panel-2/60 p-2 space-y-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {(rating === 'good' ? tags.praise : tags.issues).map((t) => {
+                    const on = picked.includes(t.value)
+                    return (
+                      <button key={t.value} onClick={() => setPicked(on ? picked.filter((v) => v !== t.value) : [...picked, t.value])}
+                        className={`rounded-full border px-2 py-0.5 text-[11px] ${on ? (rating === 'good' ? 'border-cyan text-cyan' : 'border-pink text-pink') : 'border-line text-muted'}`}>
+                        {t.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <input value={text} onChange={(e) => setText(e.target.value)}
+                  placeholder={rating === 'good' ? 'co dokładnie zagrało? (opcjonalnie)' : 'własnymi słowami, np. „logo mniejsze, w rogu”'}
+                  className="w-full rounded-lg bg-panel-2 border border-line px-2 py-1 text-[11px]" />
+                {rating === 'bad' && picked.length > 0 && (
+                  <p className="text-[10px] text-muted/80 leading-relaxed">
+                    → do promptu: {picked.map((v) => tags.issues.find((t) => t.value === v)?.fix).filter(Boolean).join(' ')}
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-3 text-[11px]">
+                  <button disabled={busy} className="underline text-muted"
+                    onClick={() => run(async () => { await api.feedback(job.id, { verdict: rating, tags: picked, text }); setRating(null); setPicked([]); setText('') })}>
+                    tylko zapisz ocenę
+                  </button>
+                  {rating === 'bad' && (
+                    <button disabled={busy || (picked.length === 0 && !text.trim())} className="underline text-cyan disabled:opacity-40"
+                      onClick={() => run(async () => {
+                        const res = await api.variant(job.id, { tags: picked, text })
+                        setRating(null); setPicked([]); setText('')
+                        onVariant?.(res)
+                      })}>
+                      ponów z poprawką (~{credits(job.credits ?? job.creditsEstimated)} kr.)
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 text-[11px]">
           {job.status === 'download_failed' && (

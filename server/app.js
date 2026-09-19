@@ -16,6 +16,7 @@ import { resolveReferences } from './references.js'
 import * as stylesStore from './styles.js'
 import { composePrompt } from './prompt.js'
 import { REFERENCE_ROLES, normalizeReferences } from './reference-roles.js'
+import * as feedback from './feedback.js'
 import { log, mask } from './log.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -79,6 +80,8 @@ export function createApp({ token, port }) {
       spend: { credits30d: creditsLast30Days(), limit: cfg.monthlyLimitCredits },
       styles: stylesStore.listStyles(),
       referenceRoles: REFERENCE_ROLES,
+      feedbackTags: { issues: feedback.ISSUE_TAGS, praise: feedback.PRAISE_TAGS },
+      feedback: feedback.listFeedback().slice(0, 500),
       chipCatalog: {
         groups: stylesStore.CHIP_GROUPS,
         avoid: stylesStore.AVOID_OPTIONS,
@@ -148,7 +151,7 @@ export function createApp({ token, port }) {
    * Wspólna droga dla „generuj” i „wyślij ponownie”: składa prompt, dokłada
    * referencje stylu, wysyła obrazy do dostawcy i pilnuje limitu wydatków.
    */
-  async function startGeneration({ modelId, values, references, styleId }) {
+  async function startGeneration({ modelId, values, references, styleId, variantOf = null, correction = null }) {
     const manifest = models.find((m) => m.id === modelId)
     if (!manifest) return { error: 'Nieznany model.', status: 400 }
 
@@ -229,6 +232,8 @@ export function createApp({ token, port }) {
       styleId: style?.id || null,
       styleName: style?.name || null,
       userPrompt,
+      variantOf,
+      correction,
     })
 
     const notes = []
@@ -295,6 +300,83 @@ export function createApp({ token, port }) {
     return c.json(result)
   })
 
+  // ── Feedback: „dobre” / „co poprawić?” / „ponów z poprawką” ─────────────
+  app.post('/api/jobs/:id/feedback', async (c) => {
+    const job = getJob(c.req.param('id'))
+    if (!job) return c.json({ error: 'Nie ma takiego zadania.' }, 404)
+    const body = await c.req.json().catch(() => ({}))
+    try {
+      const entry = feedback.saveFeedback({ jobId: job.id, ...body }, { styleId: job.styleId, modelId: job.modelId, references: job.references || [] })
+      annotateSidecar(job, { feedback: entry })
+      return c.json({ feedback: entry })
+    } catch (err) {
+      if (err instanceof feedback.FeedbackError) return c.json({ error: err.human }, 400)
+      throw err
+    }
+  })
+
+  /**
+   * Nowa wersja z poprawką: poprzedni wynik jedzie jako „obraz do edycji”,
+   * a uwagi jako dopisek do promptu. Reszta (styl, format, referencje) bez zmian.
+   */
+  app.post('/api/jobs/:id/variant', async (c) => {
+    const job = getJob(c.req.param('id'))
+    if (!job) return c.json({ error: 'Nie ma takiego zadania.' }, 404)
+    if (!job.files?.[0] || !fs.existsSync(job.files[0])) return c.json({ error: 'Nie ma pliku poprzedniej wersji — nie ma czego poprawiać.' }, 400)
+    const body = await c.req.json().catch(() => ({}))
+
+    let entry
+    try {
+      entry = feedback.saveFeedback({ jobId: job.id, verdict: 'bad', tags: body.tags, text: body.text }, { styleId: job.styleId, modelId: job.modelId, references: job.references || [] })
+    } catch (err) {
+      if (err instanceof feedback.FeedbackError) return c.json({ error: err.human }, 400)
+      throw err
+    }
+    const correction = feedback.correctionText(entry)
+    if (!correction) return c.json({ error: 'Zaznacz, co poprawić, albo napisz to własnymi słowami.' }, 400)
+
+    // Poprzedni wynik staje się pinem (tablica „Moje pliki”), żeby móc być referencją.
+    const board = boards.uploadsBoard()
+    const { pin } = boards.addPin(board.id, { bytes: fs.readFileSync(job.files[0]), name: `wersja-${job.id.slice(0, 8)}.png`, note: 'poprzednia wersja do poprawki' })
+
+    const model = models.find((m) => m.id === job.modelId)
+    const targetModel = model?.refs?.max > 0 ? model : editingCounterpart(model)
+    if (!targetModel) return c.json({ error: 'Nie ma modelu, który przyjmuje obrazy.' }, 400)
+
+    const previousRefs = (job.references || []).filter((r) => !r.fromStyle && r.pinId !== pin.id)
+    const result = await startGeneration({
+      modelId: targetModel.id,
+      values: { ...job.values, prompt: `${job.userPrompt ?? job.values?.prompt}\n\n${correction}`, count: 1 },
+      references: [{ pinId: pin.id, role: 'edycja', note: '' }, ...previousRefs],
+      styleId: job.styleId || undefined,
+      variantOf: job.id,
+      correction,
+    })
+    if (result.error) return c.json({ error: result.error }, result.status)
+    feedback.saveFeedback(entry, { ...entry, variantJobId: result.jobs[0].id })
+    return c.json(result)
+  })
+
+  /** Model „z tekstu” → jego odpowiednik „z inspiracji” (ten sam wariant, np. Flare). */
+  function editingCounterpart(model) {
+    if (!model) return models.find((m) => m.kind === 'i2i' && m.recommended) || models.find((m) => m.kind === 'i2i')
+    const base = model.id.replace(/-text-to-image$/, '')
+    return models.find((m) => m.kind === 'i2i' && m.id.startsWith(base))
+      || models.find((m) => m.kind === 'i2i' && m.recommended)
+      || models.find((m) => m.kind === 'i2i')
+  }
+
+  /** Dopisuje informację do pliku JSON leżącego obok obrazu w bibliotece. */
+  function annotateSidecar(job, patch) {
+    for (const file of job.files || []) {
+      const sidecar = file.replace(/\.[a-z0-9]+$/i, '.json')
+      try {
+        const data = JSON.parse(fs.readFileSync(sidecar, 'utf8'))
+        fs.writeFileSync(sidecar, JSON.stringify({ ...data, ...patch }, null, 2))
+      } catch { /* brak sidecara to nie błąd */ }
+    }
+  }
+
   /** Kasuje wygenerowany plik z dysku — świadomie, na prośbę użytkownika. */
   app.delete('/api/jobs/:id/file', (c) => {
     const job = getJob(c.req.param('id'))
@@ -304,6 +386,9 @@ export function createApp({ token, port }) {
       if (!resolved.startsWith(path.resolve(LIBRARY_DIR) + path.sep)) continue
       fs.rmSync(resolved, { force: true })
       fs.rmSync(resolved.replace(/\.[a-z0-9]+$/i, '.json'), { force: true })
+    }
+    if (!feedback.feedbackFor(job.id)) {
+      feedback.saveFeedback({ jobId: job.id, verdict: 'bad', tags: [], text: '' }, { implicit: 'deleted', styleId: job.styleId, modelId: job.modelId })
     }
     upsertJob({ ...job, files: [], status: 'hidden', deletedAt: new Date().toISOString() })
     return c.json({ ok: true })
@@ -383,7 +468,13 @@ export function createApp({ token, port }) {
         const resolved = path.resolve(body.fromFile)
         const allowed = SERVABLE_DIRS.some((dir) => resolved.startsWith(path.resolve(dir) + path.sep))
         if (!allowed || !fs.existsSync(resolved)) throw new boards.BoardError('Nie znaleziono tego pliku w Twojej bibliotece.')
-        return boards.addPin(boardId, { bytes: fs.readFileSync(resolved), name: path.basename(resolved), note: body.note })
+        const added = boards.addPin(boardId, { bytes: fs.readFileSync(resolved), name: path.basename(resolved), note: body.note })
+        // Przypięcie wyniku do tablicy to najuczciwszy „podoba mi się” — zapisujemy, jeśli nie ma jawnej oceny.
+        const job = readJobs().find((j) => j.files?.includes(resolved))
+        if (job && !feedback.feedbackFor(job.id)) {
+          feedback.saveFeedback({ jobId: job.id, verdict: 'good', tags: [], text: '' }, { implicit: 'pinned', styleId: job.styleId, modelId: job.modelId })
+        }
+        return added
       }
       throw new boards.BoardError('Nie podano ani pliku, ani adresu.')
     })

@@ -201,6 +201,9 @@ export default function App() {
             onChange={load}
             boards={state.boards || []}
             onPinned={(duplicate) => setToast(duplicate ? 'Ten obraz już jest na tablicy.' : 'Przypięte do tablicy.')}
+            feedback={state.feedback || []}
+            feedbackTags={state.feedbackTags || { issues: [], praise: [] }}
+            onVariant={(res) => { setToast(res.note || 'Nowa wersja z poprawką jest w kolejce.'); load() }}
           />
         )}
         {tab === 'settings' && (

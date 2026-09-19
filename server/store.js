@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { CONFIG_FILE, JOBS_FILE, LEDGER_FILE, BOARDS_FILE, UPLOADS_FILE, STYLES_FILE, ensureDataDir } from './paths.js'
+import { CONFIG_FILE, JOBS_FILE, LEDGER_FILE, BOARDS_FILE, UPLOADS_FILE, STYLES_FILE, FEEDBACK_FILE, ensureDataDir } from './paths.js'
 import { registerSecret, mask, log } from './log.js'
 
 const SCHEMA_VERSION = 1
@@ -171,4 +171,15 @@ export function readStyles() {
 export function writeStyles(styles) {
   writeJson(STYLES_FILE, { schemaVersion: SCHEMA_VERSION, styles })
   return styles
+}
+
+// ── Feedback do wyników ────────────────────────────────────────────────────
+export function readFeedback() {
+  const data = readJson(FEEDBACK_FILE, { schemaVersion: SCHEMA_VERSION, entries: [] })
+  return Array.isArray(data.entries) ? data.entries : []
+}
+
+export function writeFeedback(entries) {
+  writeJson(FEEDBACK_FILE, { schemaVersion: SCHEMA_VERSION, entries: entries.slice(0, 5000) })
+  return entries
 }
