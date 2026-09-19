@@ -1,8 +1,29 @@
 import crypto from 'node:crypto'
 
-/** Token sesji: losowy przy każdym starcie, przekazywany w URL-u i w nagłówku. */
+/** Losowy token sesji, przekazywany w URL-u i w nagłówku. */
 export function newSessionToken() {
   return crypto.randomBytes(24).toString('base64url')
+}
+
+/**
+ * Token żyje między uruchomieniami, w `config.json` (prawa 0600, tam gdzie klucz).
+ * Dzięki temu restart aplikacji nie unieważnia otwartej karty ani zakładki —
+ * a to najczęstszy powód, dla którego „nagle nic nie działa”. Ochrona przed
+ * CSRF i DNS rebinding zostaje bez zmian, bo token nadal jest sekretem.
+ */
+export function getOrCreateSessionToken(readConfig, writeConfig) {
+  const existing = readConfig().sessionToken
+  if (typeof existing === 'string' && existing.length >= 32) return existing
+  const token = newSessionToken()
+  writeConfig({ sessionToken: token })
+  return token
+}
+
+/** „Zgubiłem panowanie nad linkiem” — jedna komenda i stary adres przestaje działać. */
+export function resetSessionToken(writeConfig) {
+  const token = newSessionToken()
+  writeConfig({ sessionToken: token })
+  return token
 }
 
 function timingSafeEqual(a = '', b = '') {

@@ -53,7 +53,7 @@ W przygotowaniu: **Style** (zapisany przepis na wygląd marki: paleta, chipy opi
 Aplikacja wydaje prawdziwe pieniądze, więc traktujemy ją poważnie:
 
 - nasłuchuje **wyłącznie na `127.0.0.1`** — nikt z Twojej sieci Wi-Fi się nie dobije,
-- każde uruchomienie generuje **losowy token sesji**; bez niego API jest zamknięte (ochrona przed złośliwą stroną otwartą w tej samej przeglądarce),
+- API jest zamknięte bez **tokenu sesji** (ochrona przed złośliwą stroną otwartą w tej samej przeglądarce). Token leży w `config.json` obok klucza, więc restart aplikacji nie zabija otwartej karty; gdy link gdzieś wycieknie, unieważnisz go komendą `npx openstudio reset-token`,
 - sprawdzamy nagłówki `Host` i `Origin` (ochrona przed DNS rebinding),
 - klucz leży w `~/OpenStudio/config.json` z prawami `0600` i **nigdy** nie trafia do przeglądarki, logów ani raportu diagnostycznego — pilnuje tego automatyczny test,
 - `createTask` (POST) nie jest **nigdy** ponawiany automatycznie, bo dostawca nie ma klucza idempotencji, a podwójne wysłanie to podwójna opłata.
@@ -81,7 +81,8 @@ Jeden model = jeden plik JSON w [`models/`](models/). Formularz w aplikacji budu
 
 ```bash
 npx openstudio            # uruchamia aplikację
-npx openstudio doctor     # raport diagnostyczny (bez klucza API)
+npx openstudio doctor        # raport diagnostyczny (bez klucza API)
+npx openstudio reset-token   # nowy token sesji (stare linki przestają działać)
 npx openstudio --help
 ```
 
@@ -90,7 +91,7 @@ npx openstudio --help
 ```bash
 npm install && npm --prefix web install
 npm run build     # buduje interfejs do web/dist
-npm test          # 59 testów: adapter API, kolejka, tablice, bezpieczeństwo, redakcja klucza
+npm test          # 60 testów: adapter API, kolejka, tablice, bezpieczeństwo, redakcja klucza
 npm start
 ```
 

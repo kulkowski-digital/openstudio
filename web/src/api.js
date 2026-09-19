@@ -9,11 +9,22 @@ if (urlToken) {
 }
 export const TOKEN = sessionStorage.getItem('openstudio-token') || ''
 
+export const OFFLINE_MESSAGE =
+  'Aplikacja nie odpowiada. Sprawdź okno terminala, w którym uruchomiłeś OpenStudio — jeśli zostało zamknięte, uruchom aplikację ponownie i otwórz adres z tokenem.'
+
 async function call(path, options = {}) {
-  const res = await fetch(path, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', 'x-openstudio-token': TOKEN, ...(options.headers || {}) },
-  })
+  let res
+  try {
+    res = await fetch(path, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', 'x-openstudio-token': TOKEN, ...(options.headers || {}) },
+    })
+  } catch {
+    // `fetch` rzuca suchym „Failed to fetch”, a to zwykle znaczy, że serwer padł albo został zamknięty.
+    const err = new Error(OFFLINE_MESSAGE)
+    err.offline = true
+    throw err
+  }
   const text = await res.text()
   let data
   try { data = text ? JSON.parse(text) : {} } catch { data = { error: 'Odpowiedź serwera jest nieczytelna.' } }
@@ -45,7 +56,7 @@ export const api = {
 }
 
 /** Zdarzenia na żywo (postęp zadań). EventSource nie umie nagłówków, stąd token w URL-u. */
-export function subscribe(onJob) {
+export function subscribe(onJob, onConnection) {
   const es = new EventSource(`/api/events?t=${encodeURIComponent(TOKEN)}`)
   es.onmessage = (e) => {
     try {
@@ -53,5 +64,7 @@ export function subscribe(onJob) {
       if (payload.type === 'job') onJob(payload.job)
     } catch {}
   }
+  es.onopen = () => onConnection?.(true)
+  es.onerror = () => onConnection?.(false)   // EventSource sam próbuje wrócić
   return () => es.close()
 }

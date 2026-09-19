@@ -2,8 +2,14 @@
 
 Zacznij od **Ustawienia → Diagnostyka** (albo `npx openstudio doctor`). Raport nie zawiera klucza API, więc możesz go bezpiecznie wkleić w zgłoszeniu.
 
+### „Aplikacja nie odpowiada”
+Najczęściej znaczy dokładnie to, co mówi: proces w terminalu został zamknięty (Ctrl+C, zamknięte okno, uśpiony komputer). Strona zostaje otwarta, ale nie ma z kim rozmawiać. Uruchom `npx openstudio` ponownie — karta wróci sama w ciągu kilku sekund, bez przeładowania.
+
 ### „Brak ważnego tokenu sesji”
-Otworzyłeś aplikację bez tokenu (np. z zakładki). Wróć do terminala i użyj adresu z `?t=…`. Token zmienia się przy każdym uruchomieniu — to celowe.
+Otworzyłeś aplikację bez tokenu w adresie. Wróć do terminala i użyj adresu z `?t=…`. Token **nie** zmienia się przy każdym uruchomieniu, więc raz zapisana zakładka działa dalej. Jeśli chcesz unieważnić stare linki: `npx openstudio reset-token`.
+
+### Wklejam link do obrazka i dostaję błąd 403
+Część serwisów (Canva, Instagram, niektóre sklepy) blokuje pobieranie przez programy. Otwórz stronę w przeglądarce, zapisz obraz na dysk i przeciągnij plik na tablicę — albo przeciągnij go prosto z tamtej karty do okna OpenStudio.
 
 ### Strona się nie otwiera
 Sprawdź w terminalu, na którym porcie wystartowała aplikacja (sama szuka wolnego od 4321 w górę). Możesz wymusić swój: `OPENSTUDIO_PORT=5000 npx openstudio`.

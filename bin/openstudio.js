@@ -2,7 +2,7 @@
 import net from 'node:net'
 import { serve } from '@hono/node-server'
 import { createApp, diagnostics } from '../server/app.js'
-import { newSessionToken } from '../server/security.js'
+import { getOrCreateSessionToken, resetSessionToken } from '../server/security.js'
 import { loadModels } from '../server/models.js'
 import { DATA_DIR, ensureDataDir } from '../server/paths.js'
 import { log } from '../server/log.js'
@@ -29,11 +29,22 @@ if (command === 'doctor') {
   process.exit(report.dataDirWritable && report.manifestProblems.length === 0 ? 0 : 1)
 }
 
+if (command === 'reset-token') {
+  const { readConfig, writeConfig } = await import('../server/store.js')
+  ensureDataDir()
+  readConfig()
+  const token = resetSessionToken(writeConfig)
+  console.log('Nowy token sesji ustawiony. Stare adresy przestały działać.')
+  console.log(`Uruchom aplikację i użyj adresu, który wypisze (kończy się na ?t=${token.slice(0, 6)}…).`)
+  process.exit(0)
+}
+
 if (command === '--help' || command === 'help') {
   console.log(`OpenStudio — Twoje studio AI na własnym kluczu.
 
   npx openstudio            uruchamia aplikację i otwiera przeglądarkę
   npx openstudio doctor     raport diagnostyczny (bez klucza API)
+  npx openstudio reset-token  nadaje nowy token sesji (stare linki przestają działać)
   npx openstudio --help     ta pomoc
 
 Dane: ${DATA_DIR}`)
@@ -41,7 +52,9 @@ Dane: ${DATA_DIR}`)
 }
 
 const port = await freePort(DEFAULT_PORT)
-const token = newSessionToken()
+const { readConfig, writeConfig } = await import('../server/store.js')
+ensureDataDir()
+const token = getOrCreateSessionToken(readConfig, writeConfig)
 const app = createApp({ token, port })
 app.bootQueue()
 

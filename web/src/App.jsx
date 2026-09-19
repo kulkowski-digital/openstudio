@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, subscribe } from './api.js'
+import { api, subscribe, OFFLINE_MESSAGE } from './api.js'
 import KeyGate from './KeyGate.jsx'
 import Generator from './Generator.jsx'
 import Jobs from './Jobs.jsx'
@@ -24,6 +24,8 @@ export default function App() {
   const [preferredModelId, setPreferredModelId] = useState(null)
   const [activeBoardId, setActiveBoardId] = useState(null)
   const [toast, setToast] = useState(null)
+  const [offline, setOffline] = useState(false)
+  const [staleToken, setStaleToken] = useState(false)   // serwer żyje, ale karta ma token z poprzedniego uruchomienia
 
   const load = useCallback(async () => {
     try {
@@ -50,7 +52,7 @@ export default function App() {
         api.credits().then((r) => setBalance(r.credits)).catch(() => {})
         api.state().then(setState).catch(() => {})
       }
-    })
+    }, (connected) => { setOffline(!connected); if (connected) setStaleToken(false) })
     return off
   }, [state?.config?.hasApiKey])
 
@@ -58,6 +60,22 @@ export default function App() {
     if (!state?.config?.hasApiKey) return
     api.credits().then((r) => setBalance(r.credits)).catch(() => {})
   }, [state?.config?.hasApiKey])
+
+  // Gdy połączenie padnie, pytamy serwer co 3 s. Wracamy sami, gdy tylko odpowie.
+  useEffect(() => {
+    if (!offline) return
+    const id = setInterval(async () => {
+      try {
+        setState(await api.state())
+        setOffline(false)
+        setStaleToken(false)
+      } catch (err) {
+        // Serwer odpowiada, ale odrzuca token: został uruchomiony na nowo.
+        setStaleToken(!err.offline)
+      }
+    }, 3000)
+    return () => clearInterval(id)
+  }, [offline])
 
   if (error && !state) {
     return (
@@ -112,6 +130,24 @@ export default function App() {
           </Alert>
         )}
 
+        {offline && (
+          <Alert kind="error">
+            {staleToken ? (
+              <>
+                Aplikacja znowu działa, ale ta karta pamięta token z poprzedniego uruchomienia. Token zmienia się
+                przy każdym starcie — to zabezpieczenie, nie usterka.
+                <p className="mt-1 text-xs opacity-80">
+                  Skopiuj z terminala adres z <span className="font-mono">?t=…</span> i otwórz go tutaj.
+                </p>
+              </>
+            ) : (
+              <>
+                {OFFLINE_MESSAGE}
+                <p className="mt-1 text-xs opacity-80">Sprawdzam co 3 sekundy — gdy aplikacja wróci, ten komunikat zniknie sam.</p>
+              </>
+            )}
+          </Alert>
+        )}
         {toast && <Alert kind="ok" onClose={() => setToast(null)}>{toast}</Alert>}
 
         {tab === 'generate' && (

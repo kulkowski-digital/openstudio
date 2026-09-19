@@ -26,6 +26,7 @@ const DEFAULT_CONFIG = {
   schemaVersion: SCHEMA_VERSION,
   provider: 'kie',
   apiKey: null,
+  sessionToken: null,
   concurrency: 3,
   monthlyLimitCredits: null,
   calibration: {},
@@ -48,7 +49,7 @@ export function writeConfig(patch) {
 
 /** Wersja konfiguracji bezpieczna do wysłania do przeglądarki: bez klucza. */
 export function publicConfig(cfg = readConfig()) {
-  const { apiKey, ...rest } = cfg
+  const { apiKey, sessionToken, ...rest } = cfg
   return { ...rest, hasApiKey: Boolean(apiKey), apiKeyMasked: apiKey ? mask(apiKey) : null }
 }
 

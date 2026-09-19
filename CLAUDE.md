@@ -24,6 +24,8 @@ Uruchom `npm run doctor` i czytaj raport (nie zawiera klucza API):
 | `apiError` mówi o kredytach | Konto u dostawcy jest puste. Doładowanie jest po stronie użytkownika. |
 | `manifestProblems` niepuste | Zepsuty plik w `models/`. Napraw według komunikatu albo usuń plik. |
 | port zajęty | Aplikacja sama szuka wolnego portu w górę od 4321. Gdy nadal nie działa: `OPENSTUDIO_PORT=5000 npm start`. |
+| „Aplikacja nie odpowiada” w przeglądarce | Proces serwera nie działa. Uruchom `npm start` — otwarta karta wróci sama, bo token sesji jest trwały. |
+| „ta karta pamięta token z poprzedniego uruchomienia” | Ktoś wywołał `reset-token` albo skasował `config.json`. Podaj użytkownikowi nowy adres z terminala. |
 
 ## Czego NIGDY nie robić
 

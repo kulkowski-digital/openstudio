@@ -51,6 +51,7 @@ export default function Jobs({ jobs, onChange, boards = [], onPinned }) {
 function JobTile({ job, onChange, boards = [], onPinned }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [pickingBoard, setPickingBoard] = useState(false)
   const status = STATUS[job.status] || { label: job.status, tone: 'default' }
 
   async function run(fn) {
@@ -104,18 +105,38 @@ function JobTile({ job, onChange, boards = [], onPinned }) {
             <button disabled={busy} onClick={() => run(() => api.resend(job.id))} className="underline text-cyan">Wyślij ponownie (świadomie)</button>
           )}
           {job.files?.[0] && boards.length > 0 && (
-            <button
-              disabled={busy}
-              onClick={() => run(async () => {
-                // Najlepsze wyniki wracają na tablicę i stają się referencją dla kolejnych.
-                const boardId = boards.length === 1
-                  ? boards[0].id
-                  : (boards.find((b) => b.name === prompt(`Na którą tablicę? (${boards.map((x) => x.name).join(', ')})`, boards[0].name))?.id)
-                if (!boardId) return
-                const res = await api.addPin(boardId, { fromFile: job.files[0] })
-                onPinned?.(res.duplicate)
-              })}
-              className="underline text-cyan">📌 Przypnij do tablicy</button>
+            pickingBoard ? (
+              <select
+                autoFocus
+                defaultValue=""
+                onChange={(e) => {
+                  const boardId = e.target.value
+                  setPickingBoard(false)
+                  if (!boardId) return
+                  // Najlepsze wyniki wracają na tablicę i stają się referencją dla kolejnych.
+                  run(async () => {
+                    const res = await api.addPin(boardId, { fromFile: job.files[0] })
+                    onPinned?.(res.duplicate)
+                  })
+                }}
+                className="bg-panel-2 border border-line rounded-lg px-2 py-1 text-[11px]">
+                <option value="">wybierz tablicę…</option>
+                {boards.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            ) : (
+              <button
+                disabled={busy}
+                onClick={() => {
+                  if (boards.length === 1) {
+                    return run(async () => {
+                      const res = await api.addPin(boards[0].id, { fromFile: job.files[0] })
+                      onPinned?.(res.duplicate)
+                    })
+                  }
+                  setPickingBoard(true)
+                }}
+                className="underline text-cyan">📌 Przypnij do tablicy</button>
+            )
           )}
           {!inProgress(job.status) && (
             <button disabled={busy} onClick={() => run(() => api.hide(job.id))} className="underline text-muted">Ukryj</button>

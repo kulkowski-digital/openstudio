@@ -15,9 +15,11 @@ export default function Boards({ boards, activeId, onActiveChange, onChanged, on
   const [info, setInfo] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [link, setLink] = useState('')
+  const [newBoardName, setNewBoardName] = useState(null)   // null = formularz schowany
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const fileInput = useRef(null)
 
-  useEffect(() => { setSelected(new Set()) }, [board?.id])
+  useEffect(() => { setSelected(new Set()); setConfirmDelete(false) }, [board?.id])
 
   const addFiles = useCallback(async (files) => {
     if (!board) return
@@ -109,21 +111,49 @@ export default function Boards({ boards, activeId, onActiveChange, onChanged, on
             {b.name} <span className="font-mono text-[11px] opacity-60">{b.pins.length}</span>
           </button>
         ))}
-        <button
-          onClick={async () => {
-            const name = prompt('Nazwa nowej tablicy:', 'Kampania jesień')
-            if (name) { const res = await api.createBoard(name); onChanged(); onActiveChange(res.board.id) }
-          }}
-          className="px-3 py-1.5 rounded-full text-sm text-muted hover:text-ink border border-line">+ nowa tablica</button>
-        {boards.length > 1 && (
-          <button
-            onClick={async () => {
-              if (!confirm(`Usunąć tablicę „${board.name}” razem ze wszystkimi inspiracjami?`)) return
-              await api.deleteBoard(board.id)
+        {newBoardName === null ? (
+          <button onClick={() => setNewBoardName('')}
+            className="px-3 py-1.5 rounded-full text-sm text-muted hover:text-ink border border-line">+ nowa tablica</button>
+        ) : (
+          <form
+            className="flex items-center gap-2"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const name = newBoardName.trim()
+              if (!name) return setNewBoardName(null)
+              const res = await api.createBoard(name)
+              setNewBoardName(null)
               onChanged()
-              onActiveChange(boards.find((b) => b.id !== board.id)?.id)
+              onActiveChange(res.board.id)
             }}
-            className="ml-auto text-xs text-muted hover:text-pink underline">usuń tę tablicę</button>
+          >
+            <input autoFocus value={newBoardName} onChange={(e) => setNewBoardName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setNewBoardName(null) }}
+              placeholder="np. Kampania jesień" id="new-board" name="new-board"
+              className="rounded-full bg-panel-2 border border-line px-3 py-1.5 text-sm w-44" />
+            <button type="submit" className="text-sm text-cyan underline">dodaj</button>
+            <button type="button" onClick={() => setNewBoardName(null)} className="text-xs text-muted underline">anuluj</button>
+          </form>
+        )}
+        {boards.length > 1 && (
+          <div className="ml-auto flex items-center gap-2">
+            {confirmDelete ? (
+              <>
+                <span className="text-xs text-muted">Usunąć „{board.name}” ze wszystkimi inspiracjami?</span>
+                <button
+                  onClick={async () => {
+                    setConfirmDelete(false)
+                    await api.deleteBoard(board.id)
+                    onChanged()
+                    onActiveChange(boards.find((b) => b.id !== board.id)?.id)
+                  }}
+                  className="text-xs text-pink underline">tak, usuń</button>
+                <button onClick={() => setConfirmDelete(false)} className="text-xs text-muted underline">nie</button>
+              </>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)} className="text-xs text-muted hover:text-pink underline">usuń tę tablicę</button>
+            )}
+          </div>
         )}
       </div>
 

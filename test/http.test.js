@@ -280,3 +280,20 @@ test('notatka na inspiracji zapisuje się i usuwanie działa', async () => {
   const after = (await (await call('/api/boards')).json()).boards[0]
   assert.equal(after.pins.find((p) => p.id === pin.id), undefined)
 })
+
+// ── Token sesji ────────────────────────────────────────────────────────────
+
+test('token sesji przeżywa restart aplikacji (otwarta karta nie umiera)', async () => {
+  const { getOrCreateSessionToken, resetSessionToken } = await import('../server/security.js')
+  const { readConfig, writeConfig, publicConfig } = await import('../server/store.js')
+
+  const first = getOrCreateSessionToken(readConfig, writeConfig)
+  const second = getOrCreateSessionToken(readConfig, writeConfig)
+  assert.equal(second, first, 'ponowne uruchomienie musi wziąć ten sam token')
+  assert.ok(first.length >= 32)
+
+  const fresh = resetSessionToken(writeConfig)
+  assert.notEqual(fresh, first, 'reset-token musi unieważnić stary adres')
+
+  assert.equal(publicConfig().sessionToken, undefined, 'token nie może iść do przeglądarki w stanie aplikacji')
+})

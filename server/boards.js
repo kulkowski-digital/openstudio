@@ -142,7 +142,12 @@ export async function fetchImage(url, fetchImpl = globalThis.fetch) {
 
   const res = await fetchImpl(target.href, { headers: { 'User-Agent': 'OpenStudio/0.1 (+https://github.com/openstudio)' } })
     .catch(() => { throw new BoardError('Nie udało się połączyć z tym adresem.') })
-  if (!res.ok) throw new BoardError(`Strona odpowiedziała błędem ${res.status}.`)
+  if (!res.ok) {
+    if ([401, 403, 429].includes(res.status)) {
+      throw new BoardError(`Ta strona nie pozwala pobrać obrazka automatycznie (błąd ${res.status}). Otwórz ją w przeglądarce, zapisz obraz na dysk i przeciągnij plik tutaj — albo przeciągnij go prosto z tamtej karty.`)
+    }
+    throw new BoardError(`Strona odpowiedziała błędem ${res.status}. Sprawdź, czy link jest poprawny.`)
+  }
 
   const type = (res.headers.get('content-type') || '').split(';')[0].trim()
   const buf = Buffer.from(await res.arrayBuffer())
