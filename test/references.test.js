@@ -24,7 +24,7 @@ test('opis załączników numeruje obrazy w kolejności wysyłki i mówi, co z n
   assert.equal(lines[0], 'Załączone obrazy, w kolejności:')
   assert.match(lines[1], /^1\. Inspiracja: weź z niej klimat/)
   assert.match(lines[2], /^2\. Osoba: to ma być główny bohater.*Dodatkowo: w czarnej bluzie\./)
-  assert.match(lines[3], /^3\. Logo: wstaw je bez żadnych zmian/)
+  assert.match(lines[3], /^3\. Logo: wstaw je dokładnie raz/)
 })
 
 test('własna instrukcja idzie dosłownie, bez naszego szablonu', () => {
