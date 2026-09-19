@@ -25,7 +25,7 @@
     "dev": "OPENSTUDIO_DEV=1 node bin/openstudio.js",
     "dev:web": "npm --prefix web run dev",
     "build": "npm --prefix web run build",
-    "test": "node --test \"test/**/*.test.js\"",
+    "test": "node --test",
     "doctor": "node bin/openstudio.js doctor",
     "prepublishOnly": "npm --prefix web install && npm run build && npm test"
   },
