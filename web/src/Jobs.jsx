@@ -109,6 +109,8 @@ function JobTile({ job, onChange, boards = [], onPinned, fb, tags, onVariant }) 
         )}
 
         {job.error && <p className="text-[11px] text-pink leading-relaxed">{job.error}</p>}
+        {job.overlayError && <p className="text-[11px] text-orange leading-relaxed">Logo nie zostało nałożone: {job.overlayError}</p>}
+        {job.overlayPlaced?.length > 0 && <p className="text-[11px] text-muted">logo nałożone lokalnie ({job.overlayPlaced.length})</p>}
         {error && <Alert kind="error">{error}</Alert>}
 
         {job.status === 'done' && (

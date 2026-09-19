@@ -150,7 +150,9 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
                           onChange={(e) => update(ref.pin.id, { overlay: { ...(overlay?.defaults || {}), ...(ref.overlay || {}), widthPct: Number(e.target.value) } })} />
                         <span className="font-mono">{ref.overlay?.widthPct ?? overlay?.defaults?.widthPct ?? 18}%</span>
                       </label>
-                      <span className="text-muted/80">oryginał 1:1, zero kredytów; model dostanie tylko prośbę o wolne miejsce</span>
+                      {ref.pin.mime === 'image/webp' || ref.pin.mime === 'image/gif'
+                        ? <span className="text-pink">ten plik jest w {ref.pin.mime === 'image/webp' ? 'WEBP' : 'GIF'} — nakładka czyta tylko PNG i JPG; wgraj logo jeszcze raz</span>
+                        : <span className="text-muted/80">oryginał 1:1, zero kredytów; model dostanie tylko prośbę o wolne miejsce</span>}
                     </div>
                   ) : (
                   <input

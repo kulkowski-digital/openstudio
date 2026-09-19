@@ -13,14 +13,16 @@ export async function prepareImage(file) {
   const width = Math.round(bitmap.width * scale)
   const height = Math.round(bitmap.height * scale)
 
-  const wantsAlpha = file.type === 'image/png' || file.type === 'image/gif'
+  const wantsAlpha = file.type === 'image/png' || file.type === 'image/gif' || file.type === 'image/webp'
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
   canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height)
   bitmap.close?.()
 
-  const mime = wantsAlpha ? 'image/png' : 'image/webp'
+  // PNG dla przezroczystości, JPEG dla reszty — oba formaty umie potem czytać
+  // serwer przy nakładaniu logo. WEBP byłby odrobinę mniejszy, ale nie do odczytu.
+  const mime = wantsAlpha ? 'image/png' : 'image/jpeg'
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, 0.92))
   if (!blob) throw new Error('Nie udało się przygotować tego obrazu.')
 
