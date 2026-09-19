@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { PNG } from 'pngjs'
-import { composite, resize, applyOverlays, describeOverlays, normalizeOverlay, encodePng, decodeImage } from '../server/overlay.js'
+import { composite, resize, applyOverlays, describeOverlays, normalizeOverlay, encodePng, decodeImage, trimBorders } from '../server/overlay.js'
 
 const solid = (w, h, [r, g, b, a = 255]) => {
   const data = Buffer.alloc(w * h * 4)
@@ -64,6 +64,23 @@ test('opis do promptu prosi o czyste miejsce i zakazuje rysowania logo', () => {
 })
 
 test('parametry nakładki są pilnowane', () => {
-  assert.deepEqual(normalizeOverlay({ position: 'kosmos', widthPct: 900, marginPct: -3 }), { position: 'lewy-dol', widthPct: 60, marginPct: 0 })
-  assert.deepEqual(normalizeOverlay({}), { position: 'lewy-dol', widthPct: 18, marginPct: 4 })
+  assert.deepEqual(normalizeOverlay({ position: 'kosmos', widthPct: 900, marginPct: -3 }), { position: 'lewy-dol', widthPct: 60, marginPct: 0, trim: true })
+  assert.deepEqual(normalizeOverlay({}), { position: 'lewy-dol', widthPct: 18, marginPct: 4, trim: true })
+})
+
+test('białe ramki z JPG-a są obcinane, logo bez ramek zostaje bez zmian', () => {
+  // 10×6: białe tło, w środku limonkowy prostokąt 6×2 (x 2..7, y 2..3)
+  const img = solid(10, 6, [255, 255, 255])
+  for (let y = 2; y <= 3; y++) for (let x = 2; x <= 7; x++) img.data.set([200, 255, 0, 255], (y * 10 + x) * 4)
+  const cut = trimBorders(img)
+  assert.equal(cut.width, 6)
+  assert.equal(cut.height, 2)
+  assert.deepEqual([...cut.data.subarray(0, 3)], [200, 255, 0])
+
+  const plain = solid(5, 5, [0, 0, 0])
+  assert.equal(trimBorders(plain).width, 5, 'jednolity obraz nie jest cięty do zera')
+
+  const base = solid(100, 50, [0, 0, 0])
+  const box = composite(base, img, { position: 'lewy-dol', widthPct: 30, marginPct: 0 })
+  assert.equal(box.height, 10, 'po przycięciu proporcje to 6:2, więc 30 px szerokości daje 10 px wysokości')
 })

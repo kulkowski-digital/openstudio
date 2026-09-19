@@ -17,7 +17,7 @@ export const OVERLAY_POSITIONS = [
   { value: 'srodek-dol', label: 'na dole, pośrodku', prompt: 'na dole pośrodku' },
 ]
 
-export const OVERLAY_DEFAULTS = { position: 'lewy-dol', widthPct: 18, marginPct: 4 }
+export const OVERLAY_DEFAULTS = { position: 'lewy-dol', widthPct: 18, marginPct: 4, trim: true }
 
 export class OverlayError extends Error {
   constructor(human) {
@@ -32,7 +32,8 @@ export function normalizeOverlay(input = {}) {
   const num = (v, fallback) => (Number.isFinite(Number(v)) && v !== '' && v !== null && v !== undefined ? Number(v) : fallback)
   const widthPct = clamp(num(input.widthPct, OVERLAY_DEFAULTS.widthPct), 5, 60)
   const marginPct = clamp(num(input.marginPct, OVERLAY_DEFAULTS.marginPct), 0, 20)
-  return { position, widthPct, marginPct }
+  const trim = input.trim === undefined ? OVERLAY_DEFAULTS.trim : Boolean(input.trim)
+  return { position, widthPct, marginPct, trim }
 }
 
 /** Zdanie do promptu: model ma zostawić czyste miejsce, nie rysować logo. */
@@ -90,9 +91,39 @@ export function resize(img, width, height) {
   return { width, height, data: out }
 }
 
+/**
+ * Obcina jednolite ramki (np. białe tło wokół logo z JPG-a). Kolor ramki bierzemy
+ * z narożnika; wiersz/kolumna leci, gdy wszystkie piksele są mu bliskie.
+ * Przezroczyste piksele też liczą się jako ramka.
+ */
+export function trimBorders(img, tolerance = 18) {
+  const { width, height, data } = img
+  const corner = [data[0], data[1], data[2], data[3]]
+  const isBorder = (i) => {
+    const o = i * 4
+    if (data[o + 3] < 16) return true
+    return Math.abs(data[o] - corner[0]) <= tolerance && Math.abs(data[o + 1] - corner[1]) <= tolerance && Math.abs(data[o + 2] - corner[2]) <= tolerance
+  }
+  const rowIsBorder = (y) => { for (let x = 0; x < width; x++) if (!isBorder(y * width + x)) return false; return true }
+  const colIsBorder = (x) => { for (let y = 0; y < height; y++) if (!isBorder(y * width + x)) return false; return true }
+  let top = 0; let bottom = height - 1; let left = 0; let right = width - 1
+  while (top < bottom && rowIsBorder(top)) top++
+  while (bottom > top && rowIsBorder(bottom)) bottom--
+  while (left < right && colIsBorder(left)) left++
+  while (right > left && colIsBorder(right)) right--
+  if (top === 0 && left === 0 && bottom === height - 1 && right === width - 1) return img
+  if (bottom <= top || right <= left) return img   // jednolity obraz — nie ma czego ciąć
+  const w = right - left + 1
+  const h = bottom - top + 1
+  const out = Buffer.alloc(w * h * 4)
+  for (let y = 0; y < h; y++) data.copy(out, y * w * 4, ((top + y) * width + left) * 4, ((top + y) * width + left + w) * 4)
+  return { width: w, height: h, data: out }
+}
+
 /** Nakłada `logo` na `base` (w miejscu) z uwzględnieniem przezroczystości logo. */
-export function composite(base, logo, overlay) {
-  const { position, widthPct, marginPct } = normalizeOverlay(overlay)
+export function composite(base, logoInput, overlay) {
+  const { position, widthPct, marginPct, trim } = normalizeOverlay(overlay)
+  const logo = trim ? trimBorders(logoInput) : logoInput
   const targetW = Math.max(1, Math.round((base.width * widthPct) / 100))
   const targetH = Math.max(1, Math.round((targetW * logo.height) / logo.width))
   const scaled = logo.width === targetW && logo.height === targetH ? logo : resize(logo, targetW, targetH)
