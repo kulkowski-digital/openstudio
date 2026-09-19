@@ -10,7 +10,9 @@ import {
   readLedger, creditsLast30Days, libraryItems,
 } from './store.js'
 import { Queue } from './queue.js'
-import { DATA_DIR, LIBRARY_DIR, ensureDataDir } from './paths.js'
+import { DATA_DIR, LIBRARY_DIR, SERVABLE_DIRS, ensureDataDir } from './paths.js'
+import * as boards from './boards.js'
+import { resolveReferences } from './references.js'
 import { log, mask } from './log.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -67,6 +69,7 @@ export function createApp({ token, port }) {
       config: publicConfig(cfg),
       models: catalog,
       jobs: readJobs().slice(0, 100),
+      boards: boards.listBoards(),
       spend: { credits30d: creditsLast30Days(), limit: cfg.monthlyLimitCredits },
       dataDir: DATA_DIR,
       manifestProblems: problems,
@@ -128,18 +131,34 @@ export function createApp({ token, port }) {
   })
 
   app.post('/api/generate', async (c) => {
-    const { modelId, values } = await c.req.json().catch(() => ({}))
+    const { modelId, values, pinIds } = await c.req.json().catch(() => ({}))
     const manifest = models.find((m) => m.id === modelId)
     if (!manifest) return c.json({ error: 'Nieznany model.' }, 400)
-
-    const check = validateValues(manifest, values || {})
-    if (!check.ok) return c.json({ error: check.errors.join(' ') }, 400)
 
     const q = queue()
     if (!q) return c.json({ error: 'Najpierw dodaj klucz API.' }, 400)
 
+    // Inspiracje z tablicy jadą do dostawcy dopiero teraz — i tylko te wybrane.
+    let refs = null
+    const finalValues = { ...(values || {}) }
+    if (Array.isArray(pinIds) && pinIds.length > 0) {
+      if (manifest.refs?.max > 0) {
+        try {
+          refs = await resolveReferences(provider(), pinIds, { limit: manifest.refs.max })
+          finalValues.input_urls = refs.urls
+        } catch (err) {
+          return c.json({ error: err.human || err.message }, 400)
+        }
+      } else {
+        return c.json({ error: `Model „${manifest.title}” nie przyjmuje inspiracji — wybierz model „z inspiracji”.` }, 400)
+      }
+    }
+
+    const check = validateValues(manifest, finalValues)
+    if (!check.ok) return c.json({ error: check.errors.join(' ') }, 400)
+
     const cfg = readConfig()
-    const price = priceFor(manifest, values, cfg.calibration)
+    const price = priceFor(manifest, finalValues, cfg.calibration)
     if (cfg.monthlyLimitCredits != null && price.credits != null) {
       const spent = creditsLast30Days()
       if (spent + price.credits > cfg.monthlyLimitCredits) {
@@ -149,8 +168,8 @@ export function createApp({ token, port }) {
       }
     }
 
-    const jobs = q.enqueue({ modelId, values, calibration: cfg.calibration })
-    return c.json({ jobs, price })
+    const jobs = q.enqueue({ modelId, values: finalValues, calibration: cfg.calibration, pinIds: refs?.usedPinIds })
+    return c.json({ jobs, price, skippedPins: refs?.skippedPinIds || [] })
   })
 
   // ── Zadania ──────────────────────────────────────────────────────────────
@@ -189,6 +208,60 @@ export function createApp({ token, port }) {
     return c.json({ ok: true })
   })
 
+  // ── Tablice (inspiracje) ─────────────────────────────────────────────────
+  app.get('/api/boards', (c) => c.json({ boards: boards.listBoards() }))
+
+  app.post('/api/boards', async (c) => {
+    const { name } = await c.req.json().catch(() => ({}))
+    return c.json({ board: boards.createBoard(name || 'Nowa tablica') })
+  })
+
+  app.patch('/api/boards/:id', async (c) => {
+    const { name } = await c.req.json().catch(() => ({}))
+    return withBoardErrors(c, () => ({ board: boards.renameBoard(c.req.param('id'), name) }))
+  })
+
+  app.delete('/api/boards/:id', (c) => withBoardErrors(c, () => boards.deleteBoard(c.req.param('id'))))
+
+  /** Dodanie inspiracji: plik z przeglądarki (base64) albo adres w sieci. */
+  app.post('/api/boards/:id/pins', async (c) => {
+    const body = await c.req.json().catch(() => ({}))
+    const boardId = c.req.param('id')
+    return withBoardErrors(c, async () => {
+      if (body.url) {
+        const fetched = await boards.fetchImage(body.url)
+        return boards.addPin(boardId, { ...fetched, note: body.note })
+      }
+      if (body.base64) {
+        const clean = String(body.base64).replace(/^data:[^;]+;base64,/, '')
+        return boards.addPin(boardId, {
+          bytes: Buffer.from(clean, 'base64'),
+          mime: body.mime,
+          name: body.name,
+          note: body.note,
+          width: body.width,
+          height: body.height,
+          sourceUrl: body.sourceUrl,
+        })
+      }
+      if (body.fromFile) {
+        // „Przypnij do tablicy” — bierzemy gotowy obraz z biblioteki użytkownika.
+        const resolved = path.resolve(body.fromFile)
+        const allowed = SERVABLE_DIRS.some((dir) => resolved.startsWith(path.resolve(dir) + path.sep))
+        if (!allowed || !fs.existsSync(resolved)) throw new boards.BoardError('Nie znaleziono tego pliku w Twojej bibliotece.')
+        return boards.addPin(boardId, { bytes: fs.readFileSync(resolved), name: path.basename(resolved), note: body.note })
+      }
+      throw new boards.BoardError('Nie podano ani pliku, ani adresu.')
+    })
+  })
+
+  app.patch('/api/pins/:id', async (c) => {
+    const body = await c.req.json().catch(() => ({}))
+    return withBoardErrors(c, () => ({ pin: boards.updatePin(c.req.param('id'), body) }))
+  })
+
+  app.delete('/api/pins/:id', (c) => withBoardErrors(c, () => boards.deletePin(c.req.param('id'))))
+
   // ── Biblioteka ───────────────────────────────────────────────────────────
   app.get('/api/library', (c) => c.json({ items: libraryItems(), dir: LIBRARY_DIR }))
 
@@ -196,10 +269,9 @@ export function createApp({ token, port }) {
     const p = c.req.query('path')
     if (!p) return c.json({ error: 'Brak ścieżki.' }, 400)
     const resolved = path.resolve(p)
-    // Wolno podawać wyłącznie pliki z biblioteki użytkownika.
-    if (!resolved.startsWith(path.resolve(LIBRARY_DIR) + path.sep)) {
-      return c.json({ error: 'Dostęp tylko do plików w bibliotece.' }, 403)
-    }
+    // Wolno podawać wyłącznie pliki z biblioteki i z tablic użytkownika.
+    const allowed = SERVABLE_DIRS.some((dir) => resolved.startsWith(path.resolve(dir) + path.sep))
+    if (!allowed) return c.json({ error: 'Dostęp tylko do plików w bibliotece i na tablicach.' }, 403)
     if (!fs.existsSync(resolved)) return c.json({ error: 'Plik zniknął z dysku.' }, 404)
     const body = fs.readFileSync(resolved)
     return c.body(body, 200, { 'Content-Type': MIME[path.extname(resolved).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-store' })
@@ -245,6 +317,17 @@ export function createApp({ token, port }) {
     if (fs.existsSync(index)) return c.html(fs.readFileSync(index, 'utf8'))
     return c.html('<h1>Brak zbudowanego interfejsu</h1><p>Uruchom <code>npm run build</code> w katalogu projektu.</p>', 200)
   })
+
+  /** Błędy tablic mają gotowy komunikat po polsku — nie zamieniamy ich w 500. */
+  async function withBoardErrors(c, fn) {
+    try {
+      return c.json(await fn())
+    } catch (err) {
+      if (err instanceof boards.BoardError) return c.json({ error: err.human }, 400)
+      log.error('Błąd tablicy:', String(err))
+      return c.json({ error: 'Coś poszło nie tak przy tablicy.' }, 500)
+    }
+  }
 
   app.queueRef = () => state.queue
   app.bootQueue = () => queue()

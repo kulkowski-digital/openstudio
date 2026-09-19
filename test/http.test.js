@@ -10,8 +10,9 @@ process.env.OPENSTUDIO_HOME = HOME
 
 // Atrapa Kie.ai: testy nie dotykają prawdziwego API i nie kosztują kredytów.
 let kie
-const state = { tasks: new Map(), submits: 0 }
-const PNG = Buffer.from('89504e470d0a1a0a', 'hex')
+const state = { tasks: new Map(), submits: 0, uploads: 0, lastInput: null }
+// prawdziwy plik PNG 1×1 — atrapa musi zwracać coś, co przejdzie rozpoznanie formatu
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
 
 before(async () => {
   kie = http.createServer((req, res) => {
@@ -25,7 +26,16 @@ before(async () => {
     if (url.pathname === '/api/v1/jobs/createTask') {
       const id = 'task_' + ++state.submits
       state.tasks.set(id, 0)
-      return send({ code: 200, data: { taskId: id } })
+      let raw = ''
+      req.on('data', (c) => { raw += c })
+      return req.on('end', () => {
+        try { state.lastInput = JSON.parse(raw).input } catch { state.lastInput = null }
+        send({ code: 200, data: { taskId: id } })
+      })
+    }
+    if (url.pathname === '/api/file-base64-upload') {
+      state.uploads++
+      return send({ success: true, code: 200, data: { downloadUrl: `http://127.0.0.1:${kie.address().port}/ref-${state.uploads}.png` } })
     }
     if (url.pathname === '/api/v1/jobs/recordInfo') {
       const id = url.searchParams.get('taskId')
@@ -39,6 +49,7 @@ before(async () => {
   })
   await new Promise((r) => kie.listen(0, '127.0.0.1', r))
   process.env.OPENSTUDIO_KIE_BASE = `http://127.0.0.1:${kie.address().port}`
+  process.env.OPENSTUDIO_KIE_UPLOAD_BASE = `http://127.0.0.1:${kie.address().port}`
 })
 
 after(() => kie?.close())
@@ -159,3 +170,113 @@ function waitFor(predicate, timeout = 4000) {
     tick()
   })
 }
+
+// ── Tablice ────────────────────────────────────────────────────────────────
+
+const PIN_PNG = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(32, 7)]).toString('base64')
+const PIN_PNG2 = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(32, 9)]).toString('base64')
+
+test('tablica startowa jest w stanie aplikacji od pierwszego wejścia', async () => {
+  const body = await (await call('/api/state')).json()
+  assert.equal(body.boards.length, 1)
+  assert.equal(body.boards[0].pins.length, 0)
+})
+
+test('inspiracja wrzucona z przeglądarki ląduje na dysku, nie u dostawcy', async () => {
+  const uploadsBefore = state.uploads
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const res = await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ base64: PIN_PNG, mime: 'image/png', name: 'inspiracja.png' }) })
+  assert.equal(res.status, 200)
+  const { pin } = await res.json()
+  assert.ok(fs.existsSync(pin.file))
+  assert.equal(state.uploads, uploadsBefore, 'sam wrzut na tablicę nie może nic wysyłać do dostawcy')
+
+  const file = await call(`/api/file?path=${encodeURIComponent(pin.file)}`)
+  assert.equal(file.status, 200, 'pliki tablic muszą być widoczne w przeglądarce')
+})
+
+test('plik, który nie jest obrazem, dostaje 400 z komunikatem po polsku', async () => {
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const res = await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ base64: Buffer.from('%PDF-1.7').toString('base64'), name: 'x.pdf' }) })
+  assert.equal(res.status, 400)
+  assert.match((await res.json()).error, /nie jest obraz/i)
+})
+
+test('„Generuj w tym klimacie”: inspiracje trafiają do modelu jako input_urls', async () => {
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const p2 = (await (await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ base64: PIN_PNG2, name: 'druga.png' }) })).json()).pin
+  const pins = (await (await call('/api/boards')).json()).boards[0].pins
+
+  const uploadsBefore = state.uploads
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({
+      modelId: 'gpt-image-2-5-flare-image-to-image',
+      values: { prompt: 'w tym klimacie, ale zimą', aspect_ratio: '1:1', resolution: '1K', count: 1 },
+      pinIds: pins.map((p) => p.id),
+    }),
+  })
+  assert.equal(res.status, 200)
+  const { jobs } = await res.json()
+  assert.equal(state.uploads, uploadsBefore + 2, 'dopiero generacja wysyła inspiracje')
+  await waitFor(() => readJobs().find((j) => j.id === jobs[0].id)?.status === 'done', 15000)
+
+  assert.ok(Array.isArray(state.lastInput.input_urls))
+  assert.equal(state.lastInput.input_urls.length, 2)
+  assert.deepEqual(readJobs().find((j) => j.id === jobs[0].id).pinIds.length, 2)
+  assert.ok(p2)
+})
+
+test('drugie użycie tych samych inspiracji nie wysyła ich ponownie', async () => {
+  const pins = (await (await call('/api/boards')).json()).boards[0].pins
+  const uploadsBefore = state.uploads
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({
+      modelId: 'gpt-image-2-5-flare-image-to-image',
+      values: { prompt: 'jeszcze raz', aspect_ratio: '1:1', resolution: '1K', count: 1 },
+      pinIds: pins.map((p) => p.id),
+    }),
+  })
+  assert.equal(res.status, 200)
+  assert.equal(state.uploads, uploadsBefore, 'cache wysłanych plików nie zadziałał')
+})
+
+test('model bez referencji odmawia inspiracji i podpowiada, co zrobić', async () => {
+  const pins = (await (await call('/api/boards')).json()).boards[0].pins
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({
+      modelId: 'gpt-image-2-5-flare-text-to-image',
+      values: { prompt: 'x', resolution: '1K', count: 1 },
+      pinIds: pins.map((p) => p.id),
+    }),
+  })
+  assert.equal(res.status, 400)
+  assert.match((await res.json()).error, /z inspiracji/)
+})
+
+test('„Przypnij do tablicy” bierze gotowy obraz z biblioteki', async () => {
+  const lib = await (await call('/api/library')).json()
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const res = await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ fromFile: lib.items[0].files[0] }) })
+  assert.equal(res.status, 200)
+  assert.ok((await res.json()).pin.id)
+})
+
+test('„Przypnij” nie wpuści pliku spoza biblioteki i tablic', async () => {
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const res = await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ fromFile: '/etc/hosts' }) })
+  assert.equal(res.status, 400)
+})
+
+test('notatka na inspiracji zapisuje się i usuwanie działa', async () => {
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const pin = board.pins[0]
+  const updated = await (await call(`/api/pins/${pin.id}`, { method: 'PATCH', body: JSON.stringify({ note: 'podoba mi się światło, nie kolory' }) })).json()
+  assert.match(updated.pin.note, /światło/)
+
+  assert.equal((await call(`/api/pins/${pin.id}`, { method: 'DELETE' })).status, 200)
+  const after = (await (await call('/api/boards')).json()).boards[0]
+  assert.equal(after.pins.find((p) => p.id === pin.id), undefined)
+})

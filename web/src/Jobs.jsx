@@ -15,7 +15,7 @@ const STATUS = {
 
 const inProgress = (s) => ['queued', 'submitting', 'running', 'downloading'].includes(s)
 
-export default function Jobs({ jobs, onChange }) {
+export default function Jobs({ jobs, onChange, boards = [], onPinned }) {
   const visible = jobs.filter((j) => j.status !== 'hidden')
   const active = visible.filter((j) => inProgress(j.status))
   const rest = visible.filter((j) => !inProgress(j.status))
@@ -34,21 +34,21 @@ export default function Jobs({ jobs, onChange }) {
         <div>
           <h2 className="h-display text-lg mb-3">w toku ({active.length})</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {active.map((j) => <JobTile key={j.id} job={j} onChange={onChange} />)}
+            {active.map((j) => <JobTile key={j.id} job={j} onChange={onChange} boards={boards} onPinned={onPinned} />)}
           </div>
         </div>
       )}
       <div>
         <h2 className="h-display text-lg mb-3">biblioteka</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {rest.map((j) => <JobTile key={j.id} job={j} onChange={onChange} />)}
+          {rest.map((j) => <JobTile key={j.id} job={j} onChange={onChange} boards={boards} onPinned={onPinned} />)}
         </div>
       </div>
     </div>
   )
 }
 
-function JobTile({ job, onChange }) {
+function JobTile({ job, onChange, boards = [], onPinned }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const status = STATUS[job.status] || { label: job.status, tone: 'default' }
@@ -102,6 +102,20 @@ function JobTile({ job, onChange }) {
           )}
           {(job.status === 'failed' || job.status === 'unknown') && (
             <button disabled={busy} onClick={() => run(() => api.resend(job.id))} className="underline text-cyan">Wyślij ponownie (świadomie)</button>
+          )}
+          {job.files?.[0] && boards.length > 0 && (
+            <button
+              disabled={busy}
+              onClick={() => run(async () => {
+                // Najlepsze wyniki wracają na tablicę i stają się referencją dla kolejnych.
+                const boardId = boards.length === 1
+                  ? boards[0].id
+                  : (boards.find((b) => b.name === prompt(`Na którą tablicę? (${boards.map((x) => x.name).join(', ')})`, boards[0].name))?.id)
+                if (!boardId) return
+                const res = await api.addPin(boardId, { fromFile: job.files[0] })
+                onPinned?.(res.duplicate)
+              })}
+              className="underline text-cyan">📌 Przypnij do tablicy</button>
           )}
           {!inProgress(job.status) && (
             <button disabled={busy} onClick={() => run(() => api.hide(job.id))} className="underline text-muted">Ukryj</button>

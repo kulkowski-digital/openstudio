@@ -4,9 +4,9 @@ import Field from './Field.jsx'
 import { Alert, Badge, Card, Spinner, credits } from './ui.jsx'
 
 /** Ekran generowania: wybór modelu, formularz z manifestu, cena na przycisku. */
-export default function Generator({ models, calibrationTick, onQueued }) {
-  const usable = models.filter((m) => m.kind === 't2i')
-  const [modelId, setModelId] = useState(() => (models.find((m) => m.recommended && m.kind === 't2i') || usable[0])?.id)
+export default function Generator({ models, calibrationTick, onQueued, pins = [], onPinsChange, preferredModelId }) {
+  const usable = models
+  const [modelId, setModelId] = useState(() => preferredModelId || (models.find((m) => m.recommended && m.kind === 't2i') || usable[0])?.id)
   const model = models.find((m) => m.id === modelId)
   const [values, setValues] = useState(() => ({ ...model?.defaults }))
   const [price, setPrice] = useState(null)
@@ -19,6 +19,11 @@ export default function Generator({ models, calibrationTick, onQueued }) {
     setError(null)
   }, [modelId])
 
+  // Wybór inspiracji na tablicy przełącza na model, który je przyjmie.
+  useEffect(() => {
+    if (preferredModelId && preferredModelId !== modelId) setModelId(preferredModelId)
+  }, [preferredModelId])
+
   // Cena odświeża się 300 ms po ostatniej zmianie parametru.
   useEffect(() => {
     if (!model) return
@@ -29,15 +34,20 @@ export default function Generator({ models, calibrationTick, onQueued }) {
   }, [modelId, values.resolution, values.count, calibrationTick])
 
   const fields = useMemo(() => model?.fields ?? [], [model])
-  const basic = fields.filter((f) => !f.advanced)
-  const advanced = fields.filter((f) => f.advanced)
-  const ready = Boolean(values.prompt?.trim())
+  // Pole „images” obsługujemy osobno — inspiracje przychodzą z tablicy, nie z formularza.
+  const basic = fields.filter((f) => !f.advanced && f.type !== 'images')
+  const advanced = fields.filter((f) => f.advanced && f.type !== 'images')
+  const maxRefs = model?.refs?.max ?? 0
+  const needsPins = maxRefs > 0
+  const usedPins = pins.slice(0, maxRefs)
+  const extraPins = pins.slice(maxRefs)
+  const ready = Boolean(values.prompt?.trim()) && (!needsPins || usedPins.length > 0)
 
   async function generate() {
     setBusy(true)
     setError(null)
     try {
-      const res = await api.generate(model.id, values)
+      const res = await api.generate(model.id, values, needsPins ? usedPins.map((p) => p.id) : undefined)
       onQueued(res.jobs)
     } catch (err) {
       setError(err.message)
@@ -68,17 +78,49 @@ export default function Generator({ models, calibrationTick, onQueued }) {
               <p className="text-xs text-muted mt-1 leading-relaxed">{m.subtitle}</p>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {m.badges?.map((b) => <Badge key={b}>{b}</Badge>)}
+                {m.refs?.max > 0 && <Badge tone="pink">wymaga inspiracji</Badge>}
               </div>
             </button>
           ))}
         </div>
         <p className="text-xs text-muted mt-4 leading-relaxed">
-          Modele „z inspiracji” (do 16 obrazów referencyjnych) włączą się razem z Tablicami.
+          Modele „z inspiracji” biorą obrazy zaznaczone na Tablicach i robią z nich punkt wyjścia.
         </p>
       </Card>
 
       <Card className="p-6">
         <div className="space-y-5">
+          {needsPins && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold">Inspiracje z tablicy</span>
+                <span className="text-xs text-muted font-mono">{usedPins.length}/{maxRefs}</span>
+              </div>
+              {usedPins.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-muted">
+                  Ten model pracuje na Twoich obrazach. Wejdź na <span className="text-cyan">tablice</span>,
+                  zaznacz 3–4 inspiracje i kliknij „generuj w tym klimacie”.
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {usedPins.map((p) => (
+                    <div key={p.id} className="relative w-20 h-20 rounded-lg overflow-hidden border border-line">
+                      <img src={api.fileUrl(p.file)} alt={p.note || p.name} className="w-full h-full object-cover" />
+                      <button onClick={() => onPinsChange(pins.filter((x) => x.id !== p.id))}
+                        className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-void/80 text-[11px] text-muted hover:text-pink">×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {extraPins.length > 0 && (
+                <p className="text-xs text-orange mt-2 leading-relaxed">
+                  Zaznaczyłeś {pins.length} inspiracji, a ten model przyjmie {maxRefs}. Wezmę pierwsze {maxRefs} —
+                  usuń te, na których Ci mniej zależy, albo wybierz model z wyższym limitem.
+                </p>
+              )}
+            </div>
+          )}
+
           {basic.map((f) => (
             <Field key={f.name} field={f} value={values[f.name]} onChange={(v) => setValues((s) => ({ ...s, [f.name]: v }))} disabled={busy} />
           ))}
@@ -103,7 +145,7 @@ export default function Generator({ models, calibrationTick, onQueued }) {
           <div className="flex flex-wrap items-center gap-4 pt-1">
             <button onClick={generate} disabled={!ready || busy} className="btn-primary px-6 py-3 flex items-center gap-2">
               {busy && <Spinner />}
-              {busy ? 'wysyłam…' : 'generuj'}
+              {busy ? 'wysyłam…' : needsPins ? 'generuj w tym klimacie' : 'generuj'}
               {price?.credits != null && (
                 <span className="font-mono text-sm opacity-80">· {credits(price.credits)} kr.</span>
               )}

@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { CONFIG_FILE, JOBS_FILE, LEDGER_FILE, ensureDataDir } from './paths.js'
+import { CONFIG_FILE, JOBS_FILE, LEDGER_FILE, BOARDS_FILE, UPLOADS_FILE, ensureDataDir } from './paths.js'
 import { registerSecret, mask } from './log.js'
 
 const SCHEMA_VERSION = 1
@@ -112,4 +112,47 @@ export function libraryItems(limit = 200) {
   return readJobs()
     .filter((j) => j.status === 'done' && j.files?.length)
     .slice(0, limit)
+}
+
+// ── Tablice (inspiracje) ───────────────────────────────────────────────────
+export function readBoards() {
+  const data = readJson(BOARDS_FILE, { schemaVersion: SCHEMA_VERSION, boards: [] })
+  return Array.isArray(data.boards) ? data.boards : []
+}
+
+export function writeBoards(boards) {
+  writeJson(BOARDS_FILE, { schemaVersion: SCHEMA_VERSION, boards })
+  return boards
+}
+
+// ── Cache wysłanych referencji ─────────────────────────────────────────────
+// Pliki u dostawcy żyją 24 h, więc trzymamy je krócej (20 h) i wysyłamy ponownie.
+export const UPLOAD_TTL_MS = 20 * 3600 * 1000
+
+export function readUploads() {
+  return readJson(UPLOADS_FILE, { schemaVersion: SCHEMA_VERSION, uploads: {} }).uploads || {}
+}
+
+export function getUpload(hash) {
+  const entry = readUploads()[hash]
+  if (!entry) return null
+  if (Date.now() - new Date(entry.uploadedAt).getTime() > UPLOAD_TTL_MS) return null
+  return entry
+}
+
+export function saveUpload(hash, url) {
+  const uploads = readUploads()
+  uploads[hash] = { url, uploadedAt: new Date().toISOString() }
+  // Wpisy starsze niż doba i tak są nieważne — nie hodujemy pliku w nieskończoność.
+  for (const [key, entry] of Object.entries(uploads)) {
+    if (Date.now() - new Date(entry.uploadedAt).getTime() > UPLOAD_TTL_MS * 2) delete uploads[key]
+  }
+  writeJson(UPLOADS_FILE, { schemaVersion: SCHEMA_VERSION, uploads })
+  return uploads[hash]
+}
+
+export function forgetUpload(hash) {
+  const uploads = readUploads()
+  delete uploads[hash]
+  writeJson(UPLOADS_FILE, { schemaVersion: SCHEMA_VERSION, uploads })
 }

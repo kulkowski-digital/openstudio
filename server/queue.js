@@ -45,7 +45,7 @@ export class Queue extends EventEmitter {
   }
 
   /** Tworzy tyle zadań, ile wersji zamówił użytkownik. Zwraca listę zadań. */
-  enqueue({ modelId, values, calibration = {} }) {
+  enqueue({ modelId, values, calibration = {}, pinIds = null }) {
     const manifest = this.manifest(modelId)
     if (!manifest) throw new Error(`Nieznany model: ${modelId}`)
     const count = countOf(manifest, values)
@@ -66,6 +66,7 @@ export class Queue extends EventEmitter {
         modelTitle: manifest.title,
         input,
         values,
+        pinIds,
         status: 'queued',
         taskId: null,
         creditsEstimated: price.perImage,
@@ -232,7 +233,7 @@ export class Queue extends EventEmitter {
       if (lastErr) throw new Error(`Nie udało się pobrać pliku: ${lastErr.message}`)
       fs.writeFileSync(path.join(dir, `${base}.json`), JSON.stringify({
         id: job.id, createdAt: job.createdAt, model: job.model, modelTitle: job.modelTitle,
-        prompt: job.values?.prompt, values: job.values, credits: job.credits, sourceUrl: url,
+        prompt: job.values?.prompt, values: job.values, pinIds: job.pinIds, credits: job.credits, sourceUrl: url,
       }, null, 2))
     }
     job.files = files

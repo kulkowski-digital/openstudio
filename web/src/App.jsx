@@ -3,11 +3,13 @@ import { api, subscribe } from './api.js'
 import KeyGate from './KeyGate.jsx'
 import Generator from './Generator.jsx'
 import Jobs from './Jobs.jsx'
+import Boards from './Boards.jsx'
 import Settings from './Settings.jsx'
 import { Alert, Spinner, credits } from './ui.jsx'
 
 const TABS = [
   { id: 'generate', label: 'generuj' },
+  { id: 'boards', label: 'tablice' },
   { id: 'library', label: 'biblioteka' },
   { id: 'settings', label: 'ustawienia' },
 ]
@@ -18,6 +20,10 @@ export default function App() {
   const [tab, setTab] = useState('generate')
   const [balance, setBalance] = useState(null)
   const [calibrationTick, setCalibrationTick] = useState(0)
+  const [pins, setPins] = useState([])            // inspiracje wybrane do najbliższej generacji
+  const [preferredModelId, setPreferredModelId] = useState(null)
+  const [activeBoardId, setActiveBoardId] = useState(null)
+  const [toast, setToast] = useState(null)
 
   const load = useCallback(async () => {
     try {
@@ -106,14 +112,41 @@ export default function App() {
           </Alert>
         )}
 
+        {toast && <Alert kind="ok" onClose={() => setToast(null)}>{toast}</Alert>}
+
         {tab === 'generate' && (
           <Generator
             models={state.models}
             calibrationTick={calibrationTick}
-            onQueued={() => { setTab('library'); load() }}
+            pins={pins}
+            onPinsChange={setPins}
+            preferredModelId={preferredModelId}
+            onQueued={() => { setTab('library'); setPins([]); setPreferredModelId(null); load() }}
           />
         )}
-        {tab === 'library' && <Jobs jobs={state.jobs} onChange={load} />}
+        {tab === 'boards' && (
+          <Boards
+            boards={state.boards || []}
+            activeId={activeBoardId}
+            onActiveChange={setActiveBoardId}
+            onChanged={load}
+            onGenerate={(chosen) => {
+              setPins(chosen)
+              const model = state.models.find((m) => m.refs?.max >= chosen.length && m.recommended && m.kind === 'i2i')
+                || state.models.find((m) => m.kind === 'i2i')
+              setPreferredModelId(model?.id || null)
+              setTab('generate')
+            }}
+          />
+        )}
+        {tab === 'library' && (
+          <Jobs
+            jobs={state.jobs}
+            onChange={load}
+            boards={state.boards || []}
+            onPinned={(duplicate) => setToast(duplicate ? 'Ten obraz już jest na tablicy.' : 'Przypięte do tablicy.')}
+          />
+        )}
         {tab === 'settings' && (
           <Settings config={state.config} spend={state.spend} dataDir={state.dataDir} onChanged={load} />
         )}
