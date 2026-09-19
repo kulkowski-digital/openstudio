@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { Hono } from 'hono'
 import { guard } from './security.js'
@@ -17,6 +18,7 @@ import * as stylesStore from './styles.js'
 import { composePrompt } from './prompt.js'
 import { REFERENCE_ROLES, normalizeReferences } from './reference-roles.js'
 import * as feedback from './feedback.js'
+import { journalFor, applyProposal, dismissProposal, forgetLearned } from './style-journal.js'
 import { OVERLAY_POSITIONS, OVERLAY_DEFAULTS, normalizeOverlay } from './overlay.js'
 import { roleOf } from './reference-roles.js'
 import { log, mask } from './log.js'
@@ -529,6 +531,60 @@ export function createApp({ token, port }) {
     const body = await c.req.json().catch(() => ({}))
     return withStyleErrors(c, () => ({ style: stylesStore.importStyle(body) }))
   })
+
+  // ── Dziennik stylu ───────────────────────────────────────────────────────
+  app.get('/api/styles/:id/journal', (c) => {
+    const style = stylesStore.getStyle(c.req.param('id'))
+    if (!style) return c.json({ error: 'Nie ma takiego stylu.' }, 404)
+    const journal = journalFor(style, feedback.listFeedback(), readJobs())
+    journal.recentGood = journal.recentGood.map((g) => ({ ...g, alreadyReference: isReferenceOf(style, g.file) }))
+    return c.json({ journal })
+  })
+
+  app.post('/api/styles/:id/proposals/:tag/:action', (c) => {
+    const style = stylesStore.getStyle(c.req.param('id'))
+    if (!style) return c.json({ error: 'Nie ma takiego stylu.' }, 404)
+    const tag = c.req.param('tag')
+    const action = c.req.param('action')
+    try {
+      const next = action === 'apply' ? applyProposal(style, tag)
+        : action === 'dismiss' ? dismissProposal(style, tag)
+        : action === 'forget' ? forgetLearned(style, tag)
+        : null
+      if (!next) return c.json({ error: 'Nieznana akcja.' }, 400)
+      const saved = stylesStore.saveStyle(next)
+      return c.json({ style: saved, journal: journalFor(saved, feedback.listFeedback(), readJobs()) })
+    } catch (err) {
+      return c.json({ error: err.human || err.message }, 400)
+    }
+  })
+
+  /** Dobry wynik staje się stałą referencją stylu — z tablicy „Moje pliki”. */
+  app.post('/api/styles/:id/references', async (c) => {
+    const style = stylesStore.getStyle(c.req.param('id'))
+    if (!style) return c.json({ error: 'Nie ma takiego stylu.' }, 404)
+    const { jobId } = await c.req.json().catch(() => ({}))
+    const job = getJob(jobId)
+    const file = job?.rawFiles?.[0] && fs.existsSync(job.rawFiles[0]) ? job.rawFiles[0] : job?.files?.[0]
+    if (!file || !fs.existsSync(file)) return c.json({ error: 'Nie ma pliku tego wyniku.' }, 400)
+    if ((style.referencePinIds || []).length >= stylesStore.MAX_REFERENCES) {
+      return c.json({ error: `Styl ma już ${stylesStore.MAX_REFERENCES} referencji — usuń jedną w edycji stylu.` }, 400)
+    }
+    return withBoardErrors(c, () => {
+      const board = boards.uploadsBoard()
+      const { pin } = boards.addPin(board.id, { bytes: fs.readFileSync(file), name: `wzorzec-${job.id.slice(0, 8)}.png`, note: `wzorzec stylu „${style.name}”` })
+      const ids = [...new Set([...(style.referencePinIds || []), pin.id])]
+      const saved = stylesStore.saveStyle({ ...style, referencePinIds: ids })
+      return { style: saved, pin }
+    })
+  })
+
+  function isReferenceOf(style, file) {
+    try {
+      const hash = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+      return (style.referencePinIds || []).some((id) => boards.getPin(id)?.pin.hash === hash)
+    } catch { return false }
+  }
 
   /** „Pokaż pełny prompt” — to samo, co pojedzie do API. */
   app.post('/api/prompt-preview', async (c) => {

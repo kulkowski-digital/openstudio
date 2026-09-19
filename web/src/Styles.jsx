@@ -76,6 +76,7 @@ export default function Styles({ styles, catalog, boards, models, onChanged, onU
 
 function StyleCard({ style, catalog, onUse, onEdit, onDeleted }) {
   const [confirm, setConfirm] = useState(false)
+  const [journalOpen, setJournalOpen] = useState(false)
   const descriptors = describe(style, catalog)
 
   return (
@@ -99,9 +100,14 @@ function StyleCard({ style, catalog, onUse, onEdit, onDeleted }) {
         {descriptors.length ? descriptors.join(' · ') : 'bez opisu — działa sama paleta'}
       </p>
 
+      {style.learned?.length > 0 && (
+        <p className="text-[11px] text-muted leading-relaxed">z Twoich uwag: {style.learned.map((l) => l.text).join(' ')}</p>
+      )}
+
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <button onClick={onUse} className="text-cyan underline">użyj w generatorze</button>
         <button onClick={onEdit} className="text-muted underline">edytuj</button>
+        <button onClick={() => setJournalOpen((v) => !v)} className="text-muted underline">{journalOpen ? 'schowaj dziennik' : 'dziennik'}</button>
         <a href={api.styleExportUrl(style.id)} download className="text-muted underline">pobierz plik</a>
         {confirm ? (
           <span className="flex items-center gap-2">
@@ -112,7 +118,102 @@ function StyleCard({ style, catalog, onUse, onEdit, onDeleted }) {
           <button onClick={() => setConfirm(true)} className="ml-auto text-muted hover:text-pink underline">usuń</button>
         )}
       </div>
+
+      {journalOpen && <Journal style={style} onChanged={onDeleted} />}
     </Card>
+  )
+}
+
+/**
+ * Dziennik stylu: co z niego wychodzi (z ocen na kafelkach) i propozycje zmian.
+ * Nic nie wchodzi samo — każda propozycja czeka na „zastosuj” i da się cofnąć.
+ */
+function Journal({ style, onChanged }) {
+  const [journal, setJournal] = useState(null)
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const load = () => api.styleJournal(style.id).then((r) => setJournal(r.journal)).catch((err) => setError(err.message))
+  useEffect(() => { load() }, [style.id])
+
+  async function act(fn) {
+    setBusy(true)
+    setError(null)
+    try {
+      await fn()
+      await load()
+      onChanged()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!journal) return <div className="pt-3 border-t border-line"><Spinner className="text-cyan" /></div>
+
+  return (
+    <div className="pt-3 border-t border-line space-y-3 text-xs">
+      <div className="flex flex-wrap gap-3 text-muted">
+        <span>generacji: <span className="font-mono text-ink">{journal.generations}</span></span>
+        <span>ocenionych: <span className="font-mono text-ink">{journal.rated}</span></span>
+        <span className="text-cyan">dobre: <span className="font-mono">{journal.good}</span></span>
+        <span className="text-pink">do poprawy: <span className="font-mono">{journal.bad}</span></span>
+        {journal.implicit > 0 && <span className="opacity-70">(w tym {journal.implicit} z przypięć/skasowań)</span>}
+      </div>
+
+      {journal.topIssues.length > 0 && (
+        <p className="text-muted">najczęstsze uwagi: {journal.topIssues.slice(0, 4).map((i) => `${i.label} (${i.count}×)`).join(' · ')}</p>
+      )}
+
+      {journal.proposals.length > 0 ? (
+        <div className="space-y-2">
+          {journal.proposals.map((p) => (
+            <div key={p.tag} className="rounded-lg border border-cyan/40 bg-cyan/5 p-2 space-y-1">
+              <div><span className="text-cyan">{p.count}× „{journal.topIssues.find((i) => i.tag === p.tag)?.label}”</span> → {p.label}</div>
+              {p.text && <div className="text-muted">do promptu: „{p.text}”</div>}
+              {p.full && <div className="text-orange">Styl ma już {journal.maxLearned} dopiski — usuń jeden niżej, żeby dodać ten.</div>}
+              <div className="flex gap-3">
+                <button disabled={busy || p.full} onClick={() => act(() => api.styleProposal(style.id, p.tag, 'apply'))} className="underline text-cyan disabled:opacity-40">zastosuj</button>
+                <button disabled={busy} onClick={() => act(() => api.styleProposal(style.id, p.tag, 'dismiss'))} className="underline text-muted">pomiń</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-muted/80">Propozycja zmiany pojawi się, gdy ta sama uwaga powtórzy się {journal.threshold} razy — jedna nieudana generacja to szum, nie sygnał.</p>
+      )}
+
+      {journal.learned.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-muted">dopiski z uwag ({journal.learned.length}/{journal.maxLearned}) — widoczne w „pokaż pełny prompt”:</div>
+          {journal.learned.map((l) => (
+            <div key={l.tag} className="flex items-start gap-2">
+              <span className="flex-1">{l.text}</span>
+              <button disabled={busy} onClick={() => act(() => api.styleProposal(style.id, l.tag, 'forget'))} className="underline text-muted hover:text-pink">usuń</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {journal.recentGood.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-muted">dobre wyniki w tym stylu — dodaj jako stałą referencję:</div>
+          <div className="flex flex-wrap gap-2">
+            {journal.recentGood.map((g) => (
+              <div key={g.jobId} className="w-16 space-y-1">
+                <img src={api.fileUrl(g.file)} alt={g.userPrompt || ''} className="w-16 h-16 rounded-md object-cover border border-line" />
+                {g.alreadyReference
+                  ? <div className="text-[10px] text-cyan text-center">jest wzorcem</div>
+                  : <button disabled={busy} onClick={() => act(() => api.styleAddReference(style.id, g.jobId))} className="w-full text-[10px] underline text-cyan">jako wzorzec</button>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {error && <Alert kind="error" onClose={() => setError(null)}>{error}</Alert>}
+    </div>
   )
 }
 

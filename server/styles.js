@@ -98,6 +98,12 @@ export function normalize(input, { keepId = true } = {}) {
     // Referencje są lokalne, więc cudzy plik ich nie przywlecze.
     referencePinIds: (Array.isArray(input.referencePinIds) ? input.referencePinIds : []).slice(0, MAX_REFERENCES),
     strength,
+    // Dopiski z Twoich uwag (dziennik stylu): max 3, każdy z datą, do wyłączenia jednym kliknięciem.
+    learned: (Array.isArray(input.learned) ? input.learned : [])
+      .filter((l) => l && typeof l.tag === 'string' && typeof l.text === 'string')
+      .slice(0, 3)
+      .map((l) => ({ tag: l.tag, text: String(l.text).slice(0, 200), addedAt: l.addedAt || new Date().toISOString() })),
+    learningCursor: input.learningCursor && typeof input.learningCursor === 'object' ? input.learningCursor : {},
     defaults: {
       modelId: input.defaults?.modelId || null,
       aspect_ratio: input.defaults?.aspect_ratio || null,
@@ -108,7 +114,7 @@ export function normalize(input, { keepId = true } = {}) {
 
 /** Plik do wysłania komuś: bez referencji, bo tamten komputer ich nie ma. */
 export function exportStyle(style) {
-  const { id, referencePinIds, ...rest } = normalize(style)
+  const { id, referencePinIds, learningCursor, ...rest } = normalize(style)
   return { ...rest, exportedAt: new Date().toISOString(), app: 'openstudio' }
 }
 
@@ -141,6 +147,8 @@ export function buildPrompt(userPrompt, style) {
   }
   const avoid = (style.avoid || []).map(avoidPrompt).filter(Boolean)
   if (avoid.length) parts.push(`Unikaj: ${avoid.join(', ')}.`)
+  const learned = (style.learned || []).map((l) => l.text).filter(Boolean)
+  if (learned.length) parts.push(`Z wcześniejszych uwag: ${learned.join(' ')}`)
 
   return [base, parts.join(' ')].filter(Boolean).join('\n\n')
 }

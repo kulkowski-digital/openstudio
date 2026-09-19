@@ -660,3 +660,43 @@ test('logo (nakładka) działa z modelem z tekstu: nie idzie do modelu, prompt p
   assert.equal(job.overlayPlaced.length, 1)
   assert.equal(job.overlayError, undefined)
 })
+
+// ── Dziennik stylu ─────────────────────────────────────────────────────────
+
+test('dziennik stylu: 3 oceny „za ciemno” → propozycja → zastosuj → dopisek w prompcie', async () => {
+  const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Uczący się' }) })).json()
+  for (let i = 0; i < 3; i++) {
+    const res = await (await call('/api/generate', { method: 'POST', body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-text-to-image', values: { prompt: 'kot ' + i, resolution: '1K', count: 1 }, styleId: style.id }) })).json()
+    await call(`/api/jobs/${res.jobs[0].id}/feedback`, { method: 'POST', body: JSON.stringify({ verdict: 'bad', tags: ['za-ciemno'] }) })
+  }
+  const { journal } = await (await call(`/api/styles/${style.id}/journal`)).json()
+  assert.equal(journal.generations, 3)
+  assert.equal(journal.bad, 3)
+  assert.equal(journal.proposals[0]?.tag, 'za-ciemno')
+
+  const applied = await (await call(`/api/styles/${style.id}/proposals/za-ciemno/apply`, { method: 'POST' })).json()
+  assert.equal(applied.style.learned.length, 1)
+  assert.deepEqual(applied.journal.proposals, [])
+
+  const preview = await (await call('/api/prompt-preview', { method: 'POST', body: JSON.stringify({ prompt: 'kot', styleId: style.id }) })).json()
+  assert.match(preview.prompt, /Z wcześniejszych uwag: Scena jaśniejsza/)
+
+  const forgotten = await (await call(`/api/styles/${style.id}/proposals/za-ciemno/forget`, { method: 'POST' })).json()
+  assert.equal(forgotten.style.learned.length, 0)
+})
+
+test('dobry wynik można dodać jako stałą referencję stylu', async () => {
+  const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Z wzorcem' }) })).json()
+  const res = await (await call('/api/generate', { method: 'POST', body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-text-to-image', values: { prompt: 'wzorzec', resolution: '1K', count: 1 }, styleId: style.id }) })).json()
+  await waitFor(() => readJobs().find((j) => j.id === res.jobs[0].id)?.status === 'done', 15000)
+  await call(`/api/jobs/${res.jobs[0].id}/feedback`, { method: 'POST', body: JSON.stringify({ verdict: 'good', tags: ['klimat'] }) })
+
+  const j1 = (await (await call(`/api/styles/${style.id}/journal`)).json()).journal
+  assert.equal(j1.recentGood.length, 1)
+  assert.equal(j1.recentGood[0].alreadyReference, false)
+
+  const added = await (await call(`/api/styles/${style.id}/references`, { method: 'POST', body: JSON.stringify({ jobId: res.jobs[0].id }) })).json()
+  assert.equal(added.style.referencePinIds.length, 1)
+  const j2 = (await (await call(`/api/styles/${style.id}/journal`)).json()).journal
+  assert.equal(j2.recentGood[0].alreadyReference, true)
+})
