@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from './api.js'
 import { prepareImage, urlFromDataTransfer } from './image.js'
 import { Alert, Badge, Card, Spinner } from './ui.jsx'
@@ -17,7 +17,6 @@ export default function Boards({ boards, activeId, onActiveChange, onChanged, on
   const [link, setLink] = useState('')
   const [newBoardName, setNewBoardName] = useState(null)   // null = formularz schowany
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const fileInput = useRef(null)
 
   useEffect(() => { setSelected(new Set()); setConfirmDelete(false) }, [board?.id])
 
@@ -159,9 +158,11 @@ export default function Boards({ boards, activeId, onActiveChange, onChanged, on
 
       <Card className={`p-5 transition ${dragging ? 'border-cyan bg-cyan/5' : ''}`}>
         <div className="flex flex-wrap items-center gap-3">
-          <button onClick={() => fileInput.current?.click()} className="btn-primary px-4 py-2 text-sm">dodaj pliki</button>
-          <input ref={fileInput} type="file" accept="image/*" multiple className="hidden"
-            onChange={(e) => { addFiles([...e.target.files]); e.target.value = '' }} />
+          <label className="btn-primary px-4 py-2 text-sm cursor-pointer">
+            dodaj pliki
+            <input id="board-files" name="board-files" type="file" accept="image/*" multiple className="sr-only"
+              onChange={(e) => { addFiles([...e.target.files]); e.target.value = '' }} />
+          </label>
           <span className="text-xs text-muted">albo przeciągnij tu pliki, wciśnij <span className="font-mono">Cmd/Ctrl+V</span>, albo przeciągnij obrazek z innej karty</span>
           <div className="flex gap-2 ml-auto">
             <input value={link} onChange={(e) => setLink(e.target.value)}

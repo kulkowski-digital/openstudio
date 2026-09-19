@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from './api.js'
 import { prepareImage, urlFromDataTransfer } from './image.js'
 import { Alert, Spinner } from './ui.jsx'
@@ -12,7 +12,6 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
   const [busy, setBusy] = useState(0)
   const [error, setError] = useState(null)
   const [dragging, setDragging] = useState(false)
-  const fileInput = useRef(null)
 
   const used = refs.slice(0, maxRefs)
   const extra = refs.slice(maxRefs)
@@ -90,9 +89,13 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
         <span className="text-xs text-muted font-mono">{used.length}{styleRefsCount ? `+${styleRefsCount} ze stylu` : ''}/{maxRefs}</span>
         <div className="ml-auto flex items-center gap-3">
           {busy > 0 && <Spinner className="text-cyan" />}
-          <button type="button" disabled={disabled} onClick={() => fileInput.current?.click()} className="text-xs text-cyan underline">dodaj własny plik</button>
-          <input ref={fileInput} type="file" accept="image/*" multiple className="hidden"
-            onChange={(e) => { addFiles([...e.target.files]); e.target.value = '' }} />
+          {/* Etykieta z polem w środku: przeglądarka otwiera wybór pliku sama, bez click() z JS-a,
+              który bywa blokowany dla pól z display:none. */}
+          <label className={`text-xs text-cyan underline cursor-pointer ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+            dodaj własny plik
+            <input id="own-file" name="own-file" type="file" accept="image/*" multiple className="sr-only" disabled={disabled}
+              onChange={(e) => { addFiles([...e.target.files]); e.target.value = '' }} />
+          </label>
         </div>
       </div>
 
