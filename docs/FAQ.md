@@ -49,3 +49,12 @@ Sprawdź „pokaż pełny prompt”: czy obraz ma właściwą rolę i numer. Mod
 
 ### Klikam „dodaj własny plik" / „dodaj pliki" i okno wyboru się nie otwiera
 Najczęstsza przyczyna: kartą steruje rozszerzenie automatyzujące przeglądarkę (np. Claude in Chrome, DevTools z podłączonym debuggerem) — ono przechwytuje systemowe okna wyboru plików. Otwórz aplikację w zwykłej karcie bez rozszerzenia, albo dodaj obraz inaczej: przeciągnij plik z Findera/Eksploratora, wklej go `Cmd/Ctrl+V` albo wklej link do obrazka.
+
+### Infografika: model gubi litery albo skleja wyrazy
+Za dużo tekstu na jednej planszy. Licznik „słów na planszy” w kroku 3 robi się różowy powyżej ~80 — skróć opisy punktów (nagłówki są ważniejsze niż opisy), wyrzuć punkt albo liczbę. Pomaga też model z odznaką „napisy na grafice” (Flare) i jakość 1K na pierwszy test, a przy błędnych napisach — ocena „napisy” na kafelku i „ponów z poprawką”.
+
+### Infografika: wrzucam PDF i dostaję błąd
+PDF nie jest obsługiwany (wyciągnięcie z niego tekstu wymagałoby ciężkich zależności). Otwórz dokument, skopiuj tekst i wklej go, albo zapisz jako `.docx`. Obsługiwane: `.docx`, `.md`, `.html`, `.txt`.
+
+### Infografika: plan ma dziwne punkty albo liczby
+Darmowy „ułóż plan” to heurystyka: bierze nagłówki, wypunktowania i liczby z jednostką. Przy luźnym tekście bez struktury lepiej kliknąć „ułóż plan modelem” (koszt to zwykle ułamek kredytu, widać go po zakończeniu). Plan i tak jest do edycji — wszystko, co w nim zostawisz, trafi na obraz dosłownie.

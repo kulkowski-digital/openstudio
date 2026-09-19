@@ -30,6 +30,7 @@ Uruchom `npm run doctor` i czytaj raport (nie zawiera klucza API):
 ## Czego NIGDY nie robić
 
 - **Nie wypisuj klucza API** użytkownika w odpowiedzi, w logu ani w commicie. W repo nie ma i nie może być pliku z kluczem.
+- **Nie wołaj modelu czatu Kie (`provider.chat`) bez kliknięcia użytkownika.** To też kosztuje kredyty; heurystyka („ułóż plan”) jest darmowa i domyślna.
 - **Nie ponawiaj automatycznie** żądania generacji (`POST /api/generate`, `createTask`). Dostawca nie ma idempotencji: powtórka = druga opłata. Zadanie ze statusem `unknown` ponawia **tylko użytkownik**, świadomie.
 - **Nie wysyłaj inspiracji z tablicy do dostawcy „na zapas”.** Obietnica z UI brzmi: pliki idą dopiero przy generacji i tylko te wybrane. Upload robi wyłącznie `references.js`.
 - **Nie dopisuj niczego do promptu poza `composePrompt` (server/prompt.js).** Użytkownik ma pod „pokaż pełny prompt" widzieć dokładnie to, co idzie do API — cicha dopiska psuje jedyne miejsce, w którym aplikacja mówi całą prawdę.
@@ -50,6 +51,8 @@ server/
   reference-roles.js  role obrazów (osoba, logo, produkt…) i ich zdania dla modelu
   prompt.js           composePrompt — JEDYNE miejsce składania promptu do wysyłki
   style-chips.js      katalog określeń, z których powstaje opis stylu
+  infographic.js      infografika z tekstu: plan (heurystyka albo model czatu Kie), układy, prompt
+  documents.js        .docx/.md/.html/.txt → tekst, własny czytnik ZIP (bez zależności)
   models.js           wczytywanie i walidacja manifestów, wycena
   store.js            config.json / jobs.json / ledger.json
   providers/kie.js    adapter API dostawcy (interfejs: submit, status, credits, upload)

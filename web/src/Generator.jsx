@@ -7,7 +7,7 @@ import { Alert, Badge, Card, Spinner, credits } from './ui.jsx'
 /** Ekran generowania: wybór modelu, obrazy z rolami, formularz z manifestu, cena na przycisku. */
 export default function Generator({
   models, calibrationTick, onQueued, refs = [], onRefsChange, preferredModelId,
-  styles = [], styleId, onStyleChange, roles = [], boards = [], overlay,
+  styles = [], styleId, onStyleChange, roles = [], boards = [], overlay, seed = null,
 }) {
   const [modelId, setModelId] = useState(() => preferredModelId || (models.find((m) => m.recommended && m.kind === 't2i') || models[0])?.id)
   const model = models.find((m) => m.id === modelId)
@@ -57,6 +57,25 @@ export default function Generator({
     const t = setTimeout(apply, 0)
     return () => clearTimeout(t)
   }, [styleId])
+
+  // Prompt z zakładki „infografika”: wchodzi do pola, format z układu tylko
+  // gdy model go zna. Gdy wybrany jest model „z inspiracji” bez obrazów,
+  // przełączamy na polecany model z tekstu — ten składa napisy.
+  useEffect(() => {
+    if (!seed?.nonce) return
+    const hasModelRefs = refs.some((r) => !roles.find((x) => x.value === r.role)?.overlay)
+    let target = model
+    if (model?.refs?.max > 0 && !hasModelRefs) {
+      target = models.find((m) => m.kind === 't2i' && m.recommended) || models.find((m) => m.kind === 't2i') || model
+      if (target && target.id !== modelId) setModelId(target.id)
+    }
+    const ratioField = target?.fields?.find((f) => f.name === 'aspect_ratio')
+    const ratio = seed.defaults?.aspect_ratio
+    const ratioOk = ratio && ratioField?.options?.some((o) => o.value === ratio)
+    // Po zmianie modelu wartości i tak przechodzą przez efekt wyżej, który zachowuje prompt i format.
+    setTimeout(() => setValues((v) => ({ ...v, prompt: seed.prompt, ...(ratioOk ? { aspect_ratio: ratio } : {}) })), 0)
+    setError(null)
+  }, [seed?.nonce])
 
   const maxRefs = model?.refs?.max ?? 0
   const acceptsImages = maxRefs > 0

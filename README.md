@@ -54,6 +54,9 @@ Zobacz [docs/JAK-ZDOBYC-KLUCZ.md](docs/JAK-ZDOBYC-KLUCZ.md). W skrócie: konto n
 
   > Uczciwie: modele traktują kody kolorów orientacyjnie. Paleta przesuwa całość w Twoją stronę, ale nie zagwarantuje odcienia co do numeru.
 
+- **Infografika z tekstu** — wklejasz artykuł, notatki albo ofertę (lub wrzucasz plik `.docx`, `.md`, `.html`, `.txt` — Word i Google Docs „pobierz jako Word” działają), a aplikacja układa **plan planszy**: tytuł, 3–7 punktów, wyróżnione liczby. Plan poprawiasz w edytorze, wybierasz układ (lista, kroki, porównanie, liczby, mapa myśli) i jednym kliknięciem prompt ląduje w generatorze — ze stylem, logo i podglądem pełnego promptu jak przy każdej innej generacji.
+  „Ułóż plan” jest darmowy i lokalny (nagłówki, wypunktowania, liczby z tekstu). „Ułóż plan modelem” woła model czatu Kie **na tym samym kluczu** — zwykle ułamek kredytu — i radzi sobie lepiej z długim, nieuporządkowanym tekstem. Plik nie opuszcza komputera; do dostawcy idzie tylko tekst, i tylko gdy sam klikniesz.
+
 W przygotowaniu: wideo („Animuj" z biblioteki) i kolejni dostawcy modeli.
 
 ## Bezpieczeństwo

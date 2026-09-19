@@ -22,6 +22,8 @@ import { journalFor, applyProposal, dismissProposal, forgetLearned } from './sty
 import { OVERLAY_POSITIONS, OVERLAY_DEFAULTS, normalizeOverlay } from './overlay.js'
 import { roleOf } from './reference-roles.js'
 import { log, mask } from './log.js'
+import * as documents from './documents.js'
+import * as infographic from './infographic.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const WEB_DIST = path.join(HERE, '..', 'web', 'dist')
@@ -86,6 +88,7 @@ export function createApp({ token, port }) {
       referenceRoles: REFERENCE_ROLES,
       overlay: { positions: OVERLAY_POSITIONS, defaults: OVERLAY_DEFAULTS },
       feedbackTags: { issues: feedback.ISSUE_TAGS, praise: feedback.PRAISE_TAGS },
+      infographic: { layouts: infographic.LAYOUTS, outlineModel: infographic.OUTLINE_MODEL, maxPoints: infographic.MAX_POINTS, maxStats: infographic.MAX_STATS, accepted: documents.ACCEPTED },
       feedback: feedback.listFeedback().slice(0, 500),
       chipCatalog: {
         groups: stylesStore.CHIP_GROUPS,
@@ -291,6 +294,54 @@ export function createApp({ token, port }) {
         height: body.height,
       })
     })
+  })
+
+  // ── Infografika z tekstu ─────────────────────────────────────────────────
+  /** Plik (.txt/.md/.html/.docx) → zwykły tekst. Nic nie wychodzi z komputera. */
+  app.post('/api/infographic/extract', async (c) => {
+    const body = await c.req.json().catch(() => ({}))
+    if (!body.base64) return c.json({ error: 'Nie podano pliku.' }, 400)
+    try {
+      const clean = String(body.base64).replace(/^data:[^;]+;base64,/, '')
+      const result = documents.extractText({ bytes: Buffer.from(clean, 'base64'), name: body.name, mime: body.mime })
+      return c.json(result)
+    } catch (err) {
+      if (err instanceof documents.DocumentError) return c.json({ error: err.human }, 400)
+      log.error('Błąd odczytu dokumentu:', String(err))
+      return c.json({ error: 'Nie udało się odczytać tego pliku.' }, 500)
+    }
+  })
+
+  /**
+   * Tekst → plan (tytuł, punkty, liczby). Domyślnie heurystyka, za darmo.
+   * `useModel: true` woła model czatu Kie — to kosztuje, więc tylko na kliknięcie.
+   */
+  app.post('/api/infographic/outline', async (c) => {
+    const { text, useModel } = await c.req.json().catch(() => ({}))
+    try {
+      if (!useModel) return c.json({ outline: infographic.outlineFromText(text), credits: null, layout: null, note: null })
+      const p = provider()
+      if (!p) return c.json({ error: 'Najpierw dodaj klucz API.' }, 400)
+      return c.json(await infographic.outlineWithModel(p, text))
+    } catch (err) {
+      if (err instanceof infographic.InfographicError) return c.json({ error: err.human }, 400)
+      if (err.human) return c.json({ error: err.human }, 502)
+      log.error('Błąd planu infografiki:', String(err))
+      return c.json({ error: 'Nie udało się ułożyć planu.' }, 500)
+    }
+  })
+
+  /** Plan + układ → prompt do wklejenia w generator (tam dalej działa composePrompt). */
+  app.post('/api/infographic/prompt', async (c) => {
+    const { outline, layout } = await c.req.json().catch(() => ({}))
+    try {
+      const prompt = infographic.infographicPrompt(outline, { layout })
+      const chosen = infographic.LAYOUTS.find((l) => l.value === layout) || infographic.LAYOUTS[0]
+      return c.json({ prompt, words: infographic.wordCount(outline), defaults: chosen.defaults, layout: chosen.value })
+    } catch (err) {
+      if (err instanceof infographic.InfographicError) return c.json({ error: err.human }, 400)
+      throw err
+    }
   })
 
   // ── Zadania ──────────────────────────────────────────────────────────────

@@ -163,6 +163,24 @@ export class KieProvider {
   }
 
   /**
+   * Model czatu na tym samym kluczu (plan infografiki, w przyszłości „opisz
+   * styl”). Endpoint w stylu Anthropic: POST /claude/v1/messages, bez streamu.
+   * Płatne — wołane tylko na wyraźne kliknięcie użytkownika.
+   * @returns {Promise<{text:string, credits:number|null}>}
+   */
+  async chat({ model, prompt, maxTokens = 1024 }) {
+    const payload = await this.#call('POST', `${apiBase()}/claude/v1/messages`, {
+      body: { model, messages: [{ role: 'user', content: prompt }], stream: false, max_tokens: maxTokens },
+      retries: 0,
+    })
+    const blocks = Array.isArray(payload?.content) ? payload.content : []
+    const text = blocks.filter((b) => b?.type === 'text').map((b) => b.text).join('\n').trim()
+    if (!text) throw new ProviderError('Pusta odpowiedź modelu czatu', { human: 'Model czatu nie zwrócił tekstu. Spróbuj ponownie.' })
+    const credits = payload?.credits_consumed != null ? Number(payload.credits_consumed) : null
+    return { text, credits }
+  }
+
+  /**
    * Upload referencji (Tablice/Style, Faza 2). Zwraca publiczny URL ważny ~24 h.
    * @param {{base64:string, fileName:string, uploadPath?:string}} file
    */

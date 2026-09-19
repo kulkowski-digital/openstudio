@@ -33,6 +33,14 @@ before(async () => {
         send({ code: 200, data: { taskId: id } })
       })
     }
+    if (url.pathname === '/claude/v1/messages') {
+      let raw = ''
+      req.on('data', (c) => { raw += c })
+      return req.on('end', () => {
+        state.lastChat = JSON.parse(raw)
+        send({ id: 'msg_1', type: 'message', role: 'assistant', model: state.lastChat.model, credits_consumed: 0.25, content: [{ type: 'text', text: '{"title":"Z modelu","subtitle":"","points":[{"heading":"Jeden","text":"raz"},{"heading":"Dwa","text":"dwa"},{"heading":"Trzy","text":"trzy"}],"stats":[],"layout":"kroki"}' }] })
+      })
+    }
     if (url.pathname === '/api/file-base64-upload') {
       state.uploads++
       return send({ success: true, code: 200, data: { downloadUrl: `http://127.0.0.1:${kie.address().port}/ref-${state.uploads}.png` } })
@@ -699,4 +707,43 @@ test('dobry wynik można dodać jako stałą referencję stylu', async () => {
   assert.equal(added.style.referencePinIds.length, 1)
   const j2 = (await (await call(`/api/styles/${style.id}/journal`)).json()).journal
   assert.equal(j2.recentGood[0].alreadyReference, true)
+})
+
+// ── Infografika z tekstu ───────────────────────────────────────────────────
+
+test('infografika: plik .md → tekst → plan z heurystyki → prompt, bez wywołań dostawcy', async () => {
+  const md = '# Trzy filary\n\nWstęp o filarach.\n\n## Treść\nOdpowiadaj wprost. 80% pytań ma krótką odpowiedź.\n\n## Marka\nBądź rozpoznawalny.\n\n## Pomiar\nMierz ruch z AI.'
+  const ex = await (await call('/api/infographic/extract', { method: 'POST', body: JSON.stringify({ base64: Buffer.from(md).toString('base64'), name: 'notatki.md' }) })).json()
+  assert.equal(ex.kind, 'markdown')
+  const chatsBefore = state.lastChat
+  const ol = await (await call('/api/infographic/outline', { method: 'POST', body: JSON.stringify({ text: ex.text }) })).json()
+  assert.equal(ol.outline.title, 'Trzy filary')
+  assert.deepEqual(ol.outline.points.map((p) => p.heading), ['Treść', 'Marka', 'Pomiar'])
+  assert.equal(ol.credits, null)
+  assert.equal(state.lastChat, chatsBefore, 'heurystyka nie woła modelu czatu')
+  const pr = await (await call('/api/infographic/prompt', { method: 'POST', body: JSON.stringify({ outline: ol.outline, layout: 'liczby' }) })).json()
+  assert.match(pr.prompt, /Nagłówek na górze planszy, dokładnie: „Trzy filary”/)
+  assert.match(pr.prompt, /„80%”/)
+  assert.equal(pr.defaults.aspect_ratio, '1:1')
+  assert.ok(pr.words > 0)
+})
+
+test('infografika: plan modelem czatu idzie na ten sam klucz i zwraca koszt', async () => {
+  const ol = await (await call('/api/infographic/outline', { method: 'POST', body: JSON.stringify({ text: 'Luźne notatki bez struktury o niczym konkretnym.', useModel: true }) })).json()
+  assert.equal(ol.outline.title, 'Z modelu')
+  assert.equal(ol.layout, 'kroki')
+  assert.equal(ol.credits, 0.25)
+  assert.equal(state.lastChat.model, 'claude-haiku-4-5')
+  assert.equal(state.lastChat.stream, false)
+  assert.match(state.lastChat.messages[0].content, /Luźne notatki/)
+})
+
+test('infografika: błędy mają komunikat po polsku', async () => {
+  const pdf = await call('/api/infographic/extract', { method: 'POST', body: JSON.stringify({ base64: Buffer.from('%PDF-1.7 x').toString('base64'), name: 'a.pdf' }) })
+  assert.equal(pdf.status, 400)
+  assert.match((await pdf.json()).error, /PDF/)
+  const empty = await call('/api/infographic/outline', { method: 'POST', body: JSON.stringify({ text: '  ' }) })
+  assert.equal(empty.status, 400)
+  const state0 = await (await call('/api/state')).json()
+  assert.ok(state0.infographic.layouts.length >= 5)
 })

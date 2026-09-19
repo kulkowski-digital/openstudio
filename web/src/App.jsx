@@ -6,10 +6,12 @@ import Jobs from './Jobs.jsx'
 import Boards from './Boards.jsx'
 import Styles from './Styles.jsx'
 import Settings from './Settings.jsx'
+import Infographic from './Infographic.jsx'
 import { Alert, Spinner, credits } from './ui.jsx'
 
 const TABS = [
   { id: 'generate', label: 'generuj' },
+  { id: 'infographic', label: 'infografika' },
   { id: 'boards', label: 'tablice' },
   { id: 'styles', label: 'style' },
   { id: 'library', label: 'biblioteka' },
@@ -25,6 +27,7 @@ export default function App() {
   const [refs, setRefs] = useState([])            // obrazy do najbliższej generacji: {pin, role, note}
   const [preferredModelId, setPreferredModelId] = useState(null)
   const [styleId, setStyleId] = useState(null)
+  const [promptSeed, setPromptSeed] = useState(null)   // prompt gotowy z zakładki „infografika”
   const [activeBoardId, setActiveBoardId] = useState(null)
   const [toast, setToast] = useState(null)
   const [offline, setOffline] = useState(false)
@@ -167,7 +170,20 @@ export default function App() {
             roles={state.referenceRoles || []}
             boards={state.boards || []}
             overlay={state.overlay}
+            seed={promptSeed}
             onQueued={(_jobs, note) => { setTab('library'); setRefs([]); setPreferredModelId(null); if (note) setToast(note); load() }}
+          />
+        </div>
+        {/* Infografika też zostaje zamontowana: wklejony dokument nie może zniknąć po zerknięciu do generatora. */}
+        <div hidden={tab !== 'infographic'}>
+          <Infographic
+            config={state.infographic}
+            hasApiKey={state.config.hasApiKey}
+            onUse={({ prompt, defaults }) => {
+              setPromptSeed({ prompt, defaults, nonce: Date.now() })
+              setTab('generate')
+              setToast('Prompt infografiki jest w generatorze. Sprawdź „pokaż pełny prompt” i generuj.')
+            }}
           />
         </div>
         {tab === 'styles' && (
