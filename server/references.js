@@ -14,16 +14,22 @@ import { log } from './log.js'
  *  - po 20 godzinach adres uznajemy za wygasły (u dostawcy żyje 24 h) i wysyłamy
  *    plik ponownie.
  */
-export async function resolveReferences(provider, pinIds = [], { limit = 16 } = {}) {
-  const used = pinIds.slice(0, limit)
-  const skipped = pinIds.slice(limit)
+export async function resolveReferences(provider, pinIds = [], { limit = 16, optional = new Set() } = {}) {
+  // Piny, które zniknęły z tablicy, a były tylko „opcjonalne” (np. referencje
+  // stylu), pomijamy zamiast blokować generację.
+  const missing = []
+  const present = pinIds.filter((id) => {
+    if (getPin(id)) return true
+    if (optional.has(id)) { missing.push(id); return false }
+    throw new ReferenceError_(`Jedna z inspiracji zniknęła z tablicy (${id.slice(0, 8)}).`)
+  })
+  const used = present.slice(0, limit)
+  const skipped = present.slice(limit)
   const urls = []
   const uploaded = []
 
   for (const pinId of used) {
-    const found = getPin(pinId)
-    if (!found) throw new ReferenceError_(`Jedna z inspiracji zniknęła z tablicy (${pinId.slice(0, 8)}).`)
-    const { pin } = found
+    const { pin } = getPin(pinId)
 
     const cached = getUpload(pin.hash)
     if (cached) {
@@ -48,7 +54,7 @@ export async function resolveReferences(provider, pinIds = [], { limit = 16 } = 
   }
 
   if (uploaded.length) log.info(`Wysłano ${uploaded.length} nowych inspiracji do dostawcy.`)
-  return { urls, usedPinIds: used, skippedPinIds: skipped }
+  return { urls, usedPinIds: used, skippedPinIds: skipped, missingPinIds: missing }
 }
 
 /** Błąd z komunikatem gotowym do pokazania użytkownikowi. */

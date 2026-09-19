@@ -14,6 +14,8 @@ import { DATA_DIR, LIBRARY_DIR, SERVABLE_DIRS, ensureDataDir } from './paths.js'
 import * as boards from './boards.js'
 import { resolveReferences } from './references.js'
 import * as stylesStore from './styles.js'
+import { composePrompt } from './prompt.js'
+import { REFERENCE_ROLES, normalizeReferences } from './reference-roles.js'
 import { log, mask } from './log.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -76,6 +78,7 @@ export function createApp({ token, port }) {
       boards: boards.listBoards(),
       spend: { credits30d: creditsLast30Days(), limit: cfg.monthlyLimitCredits },
       styles: stylesStore.listStyles(),
+      referenceRoles: REFERENCE_ROLES,
       chipCatalog: {
         groups: stylesStore.CHIP_GROUPS,
         avoid: stylesStore.AVOID_OPTIONS,
@@ -141,22 +144,23 @@ export function createApp({ token, port }) {
     return c.json(priceFor(manifest, values || {}, cfg.calibration))
   })
 
-  app.post('/api/generate', async (c) => {
-    const { modelId, values, pinIds, styleId } = await c.req.json().catch(() => ({}))
+  /**
+   * Wspólna droga dla „generuj” i „wyślij ponownie”: składa prompt, dokłada
+   * referencje stylu, wysyła obrazy do dostawcy i pilnuje limitu wydatków.
+   */
+  async function startGeneration({ modelId, values, references, styleId }) {
     const manifest = models.find((m) => m.id === modelId)
-    if (!manifest) return c.json({ error: 'Nieznany model.' }, 400)
+    if (!manifest) return { error: 'Nieznany model.', status: 400 }
 
     const q = queue()
-    if (!q) return c.json({ error: 'Najpierw dodaj klucz API.' }, 400)
+    if (!q) return { error: 'Najpierw dodaj klucz API.', status: 400 }
 
     const style = styleId ? stylesStore.getStyle(styleId) : null
-    if (styleId && !style) return c.json({ error: 'Wybrany styl już nie istnieje.' }, 400)
+    if (styleId && !style) return { error: 'Wybrany styl już nie istnieje.', status: 400 }
 
-    // Inspiracje z tablicy jadą do dostawcy dopiero teraz — i tylko te wybrane.
-    let refs = null
     const finalValues = { ...(values || {}) }
+    delete finalValues.input_urls
     const userPrompt = finalValues.prompt
-    finalValues.prompt = stylesStore.buildPrompt(userPrompt, style)
 
     // Domyślne ustawienia stylu uzupełniają tylko to, czego nie podał użytkownik —
     // dzięki temu styl działa tak samo z interfejsu i z własnego skryptu.
@@ -166,40 +170,54 @@ export function createApp({ token, port }) {
       if (fromStyle && (given === undefined || given === null || given === '')) finalValues[key] = fromStyle
     }
 
-    // Referencje stylu jadą z każdą generacją; wybrane ręcznie mają pierwszeństwo.
-    const chosenPins = Array.isArray(pinIds) ? pinIds : []
-    const styleRefs = style?.referencePinIds || []
-    const allPins = [...new Set([...chosenPins, ...styleRefs])]
+    // Referencje: najpierw te wybrane przez użytkownika (z rolami), potem stałe
+    // referencje stylu jako inspiracja. Stylowe są opcjonalne — skasowany pin
+    // ich nie blokuje.
+    const chosen = normalizeReferences(references)
+    const chosenIds = new Set(chosen.map((r) => r.pinId))
+    const styleRefs = (style?.referencePinIds || []).filter((id) => !chosenIds.has(id))
+      .map((pinId) => ({ pinId, role: 'inspiracja', note: '', fromStyle: true }))
+    const wanted = [...chosen, ...styleRefs]
+    let usedRefs = []
+    let resolved = null
     let ignoredStyleRefs = 0
 
-    if (manifest.refs?.max > 0 && allPins.length > 0) {
+    if (manifest.refs?.max > 0 && wanted.length > 0) {
       try {
-        refs = await resolveReferences(provider(), allPins, { limit: manifest.refs.max })
-        finalValues.input_urls = refs.urls
+        resolved = await resolveReferences(provider(), wanted.map((r) => r.pinId), {
+          limit: manifest.refs.max,
+          optional: new Set(styleRefs.map((r) => r.pinId)),
+        })
+        usedRefs = resolved.usedPinIds.map((id) => wanted.find((r) => r.pinId === id))
+        finalValues.input_urls = resolved.urls
       } catch (err) {
-        return c.json({ error: err.human || err.message }, 400)
+        return { error: err.human || err.message, status: 400 }
       }
-    } else if (allPins.length > 0) {
+    } else if (wanted.length > 0) {
       // Model „z tekstu” nie weźmie obrazów. Wybór użytkownika to błąd, ale
       // referencje doklejone przez styl po prostu pomijamy — styl ma działać
       // z każdym modelem, a nie blokować połowę katalogu.
-      if (chosenPins.length > 0) {
-        return c.json({ error: `Model „${manifest.title}” nie przyjmuje inspiracji — wybierz model „z inspiracji”.` }, 400)
+      if (chosen.length > 0) {
+        return { error: `Model „${manifest.title}” nie przyjmuje obrazów — wybierz model „z inspiracji”.`, status: 400 }
       }
       ignoredStyleRefs = styleRefs.length
     }
 
+    // Prompt składa się DOKŁADNIE tak samo jak w „Pokaż pełny prompt”.
+    finalValues.prompt = composePrompt({ userPrompt, references: usedRefs, style })
+
     const check = validateValues(manifest, finalValues)
-    if (!check.ok) return c.json({ error: check.errors.join(' ') }, 400)
+    if (!check.ok) return { error: check.errors.join(' '), status: 400 }
 
     const cfg = readConfig()
     const price = priceFor(manifest, finalValues, cfg.calibration)
     if (cfg.monthlyLimitCredits != null && price.credits != null) {
       const spent = creditsLast30Days()
       if (spent + price.credits > cfg.monthlyLimitCredits) {
-        return c.json({
+        return {
+          status: 402,
           error: `Limit wydatków (${cfg.monthlyLimitCredits} kredytów / 30 dni) zostałby przekroczony: wydano ${spent}, ta generacja to ${price.credits}. Zmień limit w Ustawieniach albo poczekaj.`,
-        }, 402)
+        }
       }
     }
 
@@ -207,18 +225,52 @@ export function createApp({ token, port }) {
       modelId,
       values: finalValues,
       calibration: cfg.calibration,
-      pinIds: refs?.usedPinIds,
+      references: usedRefs.map((r) => ({ pinId: r.pinId, role: r.role, note: r.note, fromStyle: Boolean(r.fromStyle) })),
       styleId: style?.id || null,
       styleName: style?.name || null,
       userPrompt,
     })
-    return c.json({
-      jobs,
-      price,
-      skippedPins: refs?.skippedPinIds || [],
-      note: ignoredStyleRefs
-        ? `Ten model nie przyjmuje obrazów, więc ${ignoredStyleRefs === 1 ? 'referencja stylu została pominięta' : `${ignoredStyleRefs} referencje stylu zostały pominięte`}. Opis i paleta działają normalnie.`
-        : null,
+
+    const notes = []
+    if (ignoredStyleRefs) {
+      notes.push(`Ten model nie przyjmuje obrazów, więc ${ignoredStyleRefs === 1 ? 'referencja stylu została pominięta' : `${ignoredStyleRefs} referencje stylu zostały pominięte`}. Opis i paleta działają normalnie.`)
+    }
+    if (resolved?.missingPinIds?.length) {
+      notes.push(`${resolved.missingPinIds.length === 1 ? 'Jedna referencja stylu zniknęła' : `${resolved.missingPinIds.length} referencje stylu zniknęły`} z tablicy i zostały pominięte — popraw styl, jeśli to nie było celowe.`)
+    }
+    if (resolved?.skippedPinIds?.length) {
+      notes.push(`Model przyjmuje najwyżej ${manifest.refs.max} obrazów — ${resolved.skippedPinIds.length} pominięto.`)
+    }
+
+    return { jobs, price, skippedPins: resolved?.skippedPinIds || [], note: notes.join(' ') || null }
+  }
+
+  app.post('/api/generate', async (c) => {
+    const { modelId, values, pinIds, references, styleId } = await c.req.json().catch(() => ({}))
+    // `pinIds` to starszy kształt: sama lista, wszystko jako inspiracja.
+    const result = await startGeneration({ modelId, values, references: references ?? pinIds, styleId })
+    if (result.error) return c.json({ error: result.error }, result.status)
+    return c.json(result)
+  })
+
+  /** Obraz wrzucony prosto w generatorze (zdjęcie, logo, produkt) ląduje na tablicy „Moje pliki”. */
+  app.post('/api/uploads', async (c) => {
+    const body = await c.req.json().catch(() => ({}))
+    return withBoardErrors(c, async () => {
+      const board = boards.uploadsBoard()
+      if (body.url) {
+        const fetched = await boards.fetchImage(body.url)
+        return boards.addPin(board.id, { ...fetched, note: body.note })
+      }
+      if (!body.base64) throw new boards.BoardError('Nie podano pliku.')
+      const clean = String(body.base64).replace(/^data:[^;]+;base64,/, '')
+      return boards.addPin(board.id, {
+        bytes: Buffer.from(clean, 'base64'),
+        mime: body.mime,
+        name: body.name,
+        width: body.width,
+        height: body.height,
+      })
     })
   })
 
@@ -231,11 +283,43 @@ export function createApp({ token, port }) {
     if (job.status !== 'unknown' && job.status !== 'failed') {
       return c.json({ error: 'Ponownie wysyłamy tylko zadania nieudane albo o nieznanym losie.' }, 400)
     }
-    const q = queue()
-    if (!q) return c.json({ error: 'Najpierw dodaj klucz API.' }, 400)
-    const cfg = readConfig()
-    const jobs = q.enqueue({ modelId: job.modelId, values: { ...job.values, count: 1 }, calibration: cfg.calibration })
-    return c.json({ jobs })
+    // Linki do referencji u dostawcy mogły już wygasnąć, więc nie kopiujemy
+    // starego `input` — przechodzimy całą drogę od nowa, z tymi samymi obrazami.
+    const result = await startGeneration({
+      modelId: job.modelId,
+      values: { ...job.values, prompt: job.userPrompt ?? job.values?.prompt, count: 1 },
+      references: (job.references || []).filter((r) => !r.fromStyle),
+      styleId: job.styleId || undefined,
+    })
+    if (result.error) return c.json({ error: result.error }, result.status)
+    return c.json(result)
+  })
+
+  /** Kasuje wygenerowany plik z dysku — świadomie, na prośbę użytkownika. */
+  app.delete('/api/jobs/:id/file', (c) => {
+    const job = getJob(c.req.param('id'))
+    if (!job) return c.json({ error: 'Nie ma takiego zadania.' }, 404)
+    for (const file of job.files || []) {
+      const resolved = path.resolve(file)
+      if (!resolved.startsWith(path.resolve(LIBRARY_DIR) + path.sep)) continue
+      fs.rmSync(resolved, { force: true })
+      fs.rmSync(resolved.replace(/\.[a-z0-9]+$/i, '.json'), { force: true })
+    }
+    upsertJob({ ...job, files: [], status: 'hidden', deletedAt: new Date().toISOString() })
+    return c.json({ ok: true })
+  })
+
+  /** Otwiera folder z plikami w Finderze / Eksploratorze. */
+  app.post('/api/open-folder', async (c) => {
+    const { which } = await c.req.json().catch(() => ({}))
+    const target = which === 'library' ? LIBRARY_DIR : DATA_DIR
+    try {
+      const { default: open } = await import('open')
+      await open(target)
+      return c.json({ ok: true, path: target })
+    } catch (err) {
+      return c.json({ error: `Nie udało się otworzyć folderu. Ścieżka: ${target}` }, 500)
+    }
   })
 
   app.post('/api/jobs/:id/redownload', async (c) => {
@@ -339,9 +423,22 @@ export function createApp({ token, port }) {
 
   /** „Pokaż pełny prompt” — to samo, co pojedzie do API. */
   app.post('/api/prompt-preview', async (c) => {
-    const { prompt, styleId } = await c.req.json().catch(() => ({}))
+    const { prompt, styleId, references, modelId } = await c.req.json().catch(() => ({}))
     const style = styleId ? stylesStore.getStyle(styleId) : null
-    return c.json({ prompt: stylesStore.buildPrompt(prompt, style), styleName: style?.name || null })
+    const manifest = models.find((m) => m.id === modelId)
+    const acceptsImages = manifest ? manifest.refs?.max > 0 : true
+    const chosen = normalizeReferences(references)
+    const chosenIds = new Set(chosen.map((r) => r.pinId))
+    const styleRefs = acceptsImages
+      ? (style?.referencePinIds || []).filter((id) => !chosenIds.has(id) && boards.getPin(id)).map((pinId) => ({ pinId, role: 'inspiracja', note: '' }))
+      : []
+    const all = acceptsImages ? [...chosen, ...styleRefs] : []
+    const limit = manifest?.refs?.max || all.length
+    return c.json({
+      prompt: composePrompt({ userPrompt: prompt, references: all.slice(0, limit), style }),
+      styleName: style?.name || null,
+      referenceCount: Math.min(all.length, limit),
+    })
   })
 
   // ── Biblioteka ───────────────────────────────────────────────────────────
@@ -356,7 +453,7 @@ export function createApp({ token, port }) {
     if (!allowed) return c.json({ error: 'Dostęp tylko do plików w bibliotece i na tablicach.' }, 403)
     if (!fs.existsSync(resolved)) return c.json({ error: 'Plik zniknął z dysku.' }, 404)
     const body = fs.readFileSync(resolved)
-    return c.body(body, 200, { 'Content-Type': MIME[path.extname(resolved).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-store' })
+    return c.body(body, 200, { 'Content-Type': MIME[path.extname(resolved).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'private, max-age=86400' })
   })
 
   app.get('/api/ledger', (c) => c.json({ entries: readLedger().slice(0, 500), credits30d: creditsLast30Days() }))

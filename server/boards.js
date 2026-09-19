@@ -25,12 +25,21 @@ export function listBoards() {
   return boards
 }
 
-export function createBoard(name = 'Nowa tablica') {
+export function createBoard(name = 'Nowa tablica', extra = {}) {
   const boards = readBoards()
-  const board = { id: crypto.randomUUID(), name: String(name).slice(0, 80), createdAt: new Date().toISOString(), pins: [] }
-  boards.unshift(board)
+  const board = { id: crypto.randomUUID(), name: String(name).slice(0, 80), createdAt: new Date().toISOString(), pins: [], ...extra }
+  boards.push(board)
   writeBoards(boards)
   return board
+}
+
+/**
+ * Tablica na pliki wrzucane prosto w generatorze (zdjęcie, logo, produkt).
+ * Powstaje przy pierwszym użyciu; w Tablicach widać ją jak każdą inną.
+ */
+export function uploadsBoard() {
+  const existing = readBoards().find((b) => b.system === 'uploads')
+  return existing || createBoard('Moje pliki', { system: 'uploads' })
 }
 
 export function renameBoard(id, name) {

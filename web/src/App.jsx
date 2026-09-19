@@ -22,7 +22,7 @@ export default function App() {
   const [tab, setTab] = useState('generate')
   const [balance, setBalance] = useState(null)
   const [calibrationTick, setCalibrationTick] = useState(0)
-  const [pins, setPins] = useState([])            // inspiracje wybrane do najbliższej generacji
+  const [refs, setRefs] = useState([])            // obrazy do najbliższej generacji: {pin, role, note}
   const [preferredModelId, setPreferredModelId] = useState(null)
   const [styleId, setStyleId] = useState(null)
   const [activeBoardId, setActiveBoardId] = useState(null)
@@ -153,19 +153,22 @@ export default function App() {
         )}
         {toast && <Alert kind="ok" onClose={() => setToast(null)}>{toast}</Alert>}
 
-        {tab === 'generate' && (
+        {/* Generator zostaje zamontowany zawsze: wyjście na tablice po inspiracje nie może kasować wpisanego promptu. */}
+        <div hidden={tab !== 'generate'}>
           <Generator
             models={state.models}
             calibrationTick={calibrationTick}
-            pins={pins}
-            onPinsChange={setPins}
+            refs={refs}
+            onRefsChange={setRefs}
             preferredModelId={preferredModelId}
             styles={state.styles || []}
             styleId={styleId}
             onStyleChange={setStyleId}
-            onQueued={() => { setTab('library'); setPins([]); setPreferredModelId(null); load() }}
+            roles={state.referenceRoles || []}
+            boards={state.boards || []}
+            onQueued={(_jobs, note) => { setTab('library'); setRefs([]); setPreferredModelId(null); if (note) setToast(note); load() }}
           />
-        )}
+        </div>
         {tab === 'styles' && (
           <Styles
             styles={state.styles || []}
@@ -183,7 +186,8 @@ export default function App() {
             onActiveChange={setActiveBoardId}
             onChanged={load}
             onGenerate={(chosen) => {
-              setPins(chosen)
+              // Z tablicy wszystko wchodzi jako inspiracja; rolę zmienisz w generatorze.
+              setRefs(chosen.map((pin) => ({ pin, role: 'inspiracja', note: '' })))
               const model = state.models.find((m) => m.refs?.max >= chosen.length && m.recommended && m.kind === 'i2i')
                 || state.models.find((m) => m.kind === 'i2i')
               setPreferredModelId(model?.id || null)

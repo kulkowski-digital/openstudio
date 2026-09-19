@@ -48,6 +48,7 @@ Zobacz [docs/JAK-ZDOBYC-KLUCZ.md](docs/JAK-ZDOBYC-KLUCZ.md). W skrócie: konto n
 - **Tablice** — moodboard jak Pinterest. Wrzucasz inspiracje (przeciągnięciem, `Cmd/Ctrl+V`, przeciągnięciem obrazka z innej karty albo linkiem), zaznaczasz 3–4 i klikasz **„generuj w tym klimacie”**. Gotowe obrazy wracają na tablicę przyciskiem „📌 Przypnij”, więc najlepsze wyniki stają się referencjami dla kolejnych.
   Inspiracje leżą na Twoim dysku. Do dostawcy trafiają **tylko te, których użyjesz w generacji**, i dopiero w momencie kliknięcia — raz na plik, z ważnością 20 godzin.
 
+- **Własne obrazy z rolami** — do generacji dorzucasz swoje zdjęcie, logo albo produkt (przeciągnięciem, `Cmd/Ctrl+V` albo przyciskiem) i każdemu nadajesz rolę: *inspiracja*, *osoba*, *produkt*, *logo*, *tło*, *obraz do edycji* albo *własna instrukcja*. Aplikacja dopisuje do promptu numerowaną listę „co zrobić z którym obrazem” — w tej samej kolejności, w jakiej obrazy idą do modelu. Widać to w „pokaż pełny prompt”.
 - **Style** — zapisany przepis na wygląd, włączany jednym kliknięciem przy każdej generacji. Paletę wyciągamy z Twoich inspiracji **lokalnie w przeglądarce** (bez API i bez kosztów), opis składasz z gotowych określeń po polsku zamiast pisać prompt, a „czego unikać” działa raz a dobrze. Przycisk **„pokaż pełny prompt”** zawsze pokazuje dokładnie to, co pojedzie do modelu.
   Styl **wyeksportujesz do pliku `.styl.json`** i wyślesz komuś; gotowe style leżą w [`styles/`](styles/).
 

@@ -54,7 +54,10 @@ export default function Settings({ config, spend, dataDir, onChanged }) {
 
         <div>
           <Label hint="Tutaj lądują wszystkie wygenerowane obrazy razem z opisem, jakim promptem powstały.">Folder z Twoimi plikami</Label>
-          <div className="font-mono text-xs bg-panel-2 border border-line rounded-xl px-4 py-2.5 break-all">{dataDir}</div>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 font-mono text-xs bg-panel-2 border border-line rounded-xl px-4 py-2.5 break-all">{dataDir}</div>
+            <button onClick={() => api.openFolder('data').catch((err) => setMsg({ kind: 'error', text: err.message }))} className="text-xs text-cyan underline whitespace-nowrap">otwórz folder</button>
+          </div>
         </div>
 
         {msg && <Alert kind={msg.kind}>{msg.text}</Alert>}

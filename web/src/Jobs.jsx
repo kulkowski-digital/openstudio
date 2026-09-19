@@ -39,7 +39,10 @@ export default function Jobs({ jobs, onChange, boards = [], onPinned }) {
         </div>
       )}
       <div>
-        <h2 className="h-display text-lg mb-3">biblioteka</h2>
+        <div className="flex items-center gap-4 mb-3">
+          <h2 className="h-display text-lg">biblioteka</h2>
+          <button onClick={() => api.openFolder('library').catch(() => {})} className="text-xs text-cyan underline">otwórz folder</button>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {rest.map((j) => <JobTile key={j.id} job={j} onChange={onChange} boards={boards} onPinned={onPinned} />)}
         </div>
@@ -52,6 +55,7 @@ function JobTile({ job, onChange, boards = [], onPinned }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [pickingBoard, setPickingBoard] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const status = STATUS[job.status] || { label: job.status, tone: 'default' }
 
   async function run(fn) {
@@ -71,7 +75,7 @@ function JobTile({ job, onChange, boards = [], onPinned }) {
     <Card className="overflow-hidden flex flex-col">
       <div className="aspect-square bg-panel-2 flex items-center justify-center relative">
         {job.files?.[0] ? (
-          <a href={api.fileUrl(job.files[0])} target="_blank" rel="noreferrer" className="block w-full h-full">
+          <a href={api.fileLink(job.files[0])} target="_blank" rel="noreferrer" className="block w-full h-full">
             <img src={api.fileUrl(job.files[0])} alt={job.values?.prompt || 'wygenerowany obraz'} className="w-full h-full object-contain" />
           </a>
         ) : inProgress(job.status) ? (
@@ -92,7 +96,13 @@ function JobTile({ job, onChange, boards = [], onPinned }) {
           </span>
         </div>
 
-        <p className="text-xs text-muted line-clamp-3 leading-relaxed flex-1">{job.values?.prompt}</p>
+        <p className="text-xs text-muted line-clamp-3 leading-relaxed flex-1">{job.userPrompt ?? job.values?.prompt}</p>
+        {(job.styleName || job.references?.length > 0) && (
+          <div className="flex flex-wrap gap-1.5">
+            {job.styleName && <Badge tone="cyan">styl: {job.styleName}</Badge>}
+            {job.references?.length > 0 && <Badge>{job.references.length === 1 ? '1 obraz' : `${job.references.length} obrazy`}: {job.references.map((r) => r.role).join(', ')}</Badge>}
+          </div>
+        )}
 
         {job.error && <p className="text-[11px] text-pink leading-relaxed">{job.error}</p>}
         {error && <Alert kind="error">{error}</Alert>}
@@ -140,6 +150,16 @@ function JobTile({ job, onChange, boards = [], onPinned }) {
           )}
           {!inProgress(job.status) && (
             <button disabled={busy} onClick={() => run(() => api.hide(job.id))} className="underline text-muted">Ukryj</button>
+          )}
+          {job.files?.[0] && !inProgress(job.status) && (
+            confirmDelete ? (
+              <span className="flex items-center gap-2">
+                <button disabled={busy} onClick={() => run(() => api.deleteFile(job.id))} className="underline text-pink">na pewno usuń z dysku</button>
+                <button onClick={() => setConfirmDelete(false)} className="underline text-muted">nie</button>
+              </span>
+            ) : (
+              <button disabled={busy} onClick={() => setConfirmDelete(true)} className="underline text-muted hover:text-pink">Usuń z dysku</button>
+            )
           )}
           {job.files?.[0] && (
             <span className="font-mono text-muted/70 truncate" title={job.files[0]}>{job.files[0].split('/').slice(-2).join('/')}</span>

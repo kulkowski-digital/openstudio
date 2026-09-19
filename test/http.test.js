@@ -55,7 +55,7 @@ before(async () => {
 after(() => kie?.close())
 
 const { createApp } = await import('../server/app.js')
-const { readJobs } = await import('../server/store.js')
+const { readJobs, writeJobs } = await import('../server/store.js')
 
 const TOKEN = 'token-testowy-123'
 const PORT = 4321
@@ -452,4 +452,127 @@ test('domyślne ustawienia stylu uzupełniają tylko to, czego nie podał użytk
   })).json()
   assert.equal(zWyborem.jobs[0].values.aspect_ratio, '1:1', 'wybór użytkownika ma pierwszeństwo nad stylem')
   assert.equal(zWyborem.jobs[0].values.resolution, '1K')
+})
+
+// ── Własne pliki z rolami ──────────────────────────────────────────────────
+
+test('plik wrzucony w generatorze ląduje na tablicy „Moje pliki”, która powstaje sama', async () => {
+  const res = await call('/api/uploads', { method: 'POST', body: JSON.stringify({ base64: PIN_PNG, name: 'moje-zdjecie.png' }) })
+  assert.equal(res.status, 200)
+  const { pin } = await res.json()
+  const all = (await (await call('/api/boards')).json()).boards
+  const uploads = all.find((b) => b.system === 'uploads')
+  assert.equal(uploads.name, 'Moje pliki')
+  assert.ok(uploads.pins.some((p) => p.id === pin.id))
+})
+
+test('role obrazów trafiają do promptu w tej samej kolejności co input_urls', async () => {
+  const boardsAll = (await (await call('/api/boards')).json()).boards
+  const pins = boardsAll.flatMap((b) => b.pins)
+  const [inspiracja, osoba, logo] = pins
+  const references = [
+    { pinId: inspiracja.id, role: 'inspiracja' },
+    { pinId: osoba.id, role: 'osoba', note: 'w czarnej bluzie' },
+    { pinId: logo.id, role: 'logo' },
+  ]
+
+  const preview = await (await call('/api/prompt-preview', {
+    method: 'POST',
+    body: JSON.stringify({ prompt: 'plakat na konferencję', references, modelId: 'gpt-image-2-5-flare-image-to-image' }),
+  })).json()
+  assert.equal(preview.referenceCount, 3)
+
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-image-to-image', values: { prompt: 'plakat na konferencję', resolution: '1K', count: 1 }, references }),
+  })
+  assert.equal(res.status, 200)
+  const { jobs } = await res.json()
+  await waitFor(() => readJobs().find((j) => j.id === jobs[0].id)?.status === 'done', 15000)
+
+  assert.equal(state.lastInput.prompt, preview.prompt, 'podgląd i wysyłka muszą być identyczne')
+  assert.equal(state.lastInput.input_urls.length, 3)
+  assert.match(state.lastInput.prompt, /1\. Inspiracja:[\s\S]*2\. Osoba:[\s\S]*w czarnej bluzie[\s\S]*3\. Logo:/)
+
+  const job = readJobs().find((j) => j.id === jobs[0].id)
+  assert.deepEqual(job.references.map((r) => r.role), ['inspiracja', 'osoba', 'logo'])
+})
+
+test('„wyślij ponownie” przechodzi całą drogę od nowa: te same obrazy, ten sam styl, świeże linki', async () => {
+  const pins = (await (await call('/api/boards')).json()).boards.flatMap((b) => b.pins)
+  const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Do ponowienia' }) })).json()
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-image-to-image', values: { prompt: 'ponów mnie', resolution: '1K', count: 1 }, references: [{ pinId: pins[0].id, role: 'produkt' }], styleId: style.id }),
+  })
+  const { jobs } = await res.json()
+  await waitFor(() => readJobs().find((j) => j.id === jobs[0].id)?.status === 'done', 15000)
+
+  // udajemy porażkę, żeby wolno było ponowić
+  const all = readJobs()
+  all.find((j) => j.id === jobs[0].id).status = 'failed'
+  writeJobs(all)
+
+  const again = await call(`/api/jobs/${jobs[0].id}/resend`, { method: 'POST' })
+  assert.equal(again.status, 200)
+  const nowy = (await again.json()).jobs[0]
+  assert.equal(nowy.userPrompt, 'ponów mnie', 'prompt użytkownika nie może się podwoić o styl')
+  assert.equal(nowy.styleName, 'Do ponowienia')
+  assert.deepEqual(nowy.references.map((r) => r.role), ['produkt'])
+  assert.ok(nowy.input.input_urls.length === 1)
+  assert.equal(nowy.values.prompt.match(/Zachowaj ten styl/g).length, 1, 'styl doklejony dokładnie raz')
+})
+
+test('skasowana referencja stylu nie blokuje generacji — jest pomijana z informacją', async () => {
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const tmp = (await (await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ base64: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(32, 77)]).toString('base64'), name: 'tymczasowy.png' }) })).json()).pin
+  const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Z martwym pinem', referencePinIds: [tmp.id] }) })).json()
+  await call(`/api/pins/${tmp.id}`, { method: 'DELETE' })
+
+  const other = (await (await call('/api/boards')).json()).boards.flatMap((b) => b.pins)[0]
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-image-to-image', values: { prompt: 'x', resolution: '1K', count: 1 }, references: [{ pinId: other.id }], styleId: style.id }),
+  })
+  assert.equal(res.status, 200)
+  assert.match((await res.json()).note, /zniknęła z tablicy/)
+})
+
+test('kasowanie pliku z dysku usuwa obraz i metadane, zadanie znika z biblioteki', async () => {
+  const lib = (await (await call('/api/library')).json()).items
+  const job = lib[0]
+  const file = job.files[0]
+  assert.ok(fs.existsSync(file))
+  const res = await call(`/api/jobs/${job.id}/file`, { method: 'DELETE' })
+  assert.equal(res.status, 200)
+  assert.equal(fs.existsSync(file), false)
+  assert.equal(fs.existsSync(file.replace(/\.png$/, '.json')), false)
+  const after = (await (await call('/api/library')).json()).items
+  assert.ok(!after.some((j) => j.id === job.id))
+})
+
+test('miniatury z tej samej strony nie potrzebują tokenu w adresie; obca strona nadal tak', async () => {
+  const lib = (await (await call('/api/library')).json()).items
+  const file = lib[0].files[0]
+  const url = `http://127.0.0.1:${PORT}/api/file?path=${encodeURIComponent(file)}`
+
+  const sameOrigin = await app.request(url, { headers: { host: `127.0.0.1:${PORT}`, 'sec-fetch-site': 'same-origin', 'sec-fetch-dest': 'image' } })
+  assert.equal(sameOrigin.status, 200)
+
+  const crossSite = await app.request(url, { headers: { host: `127.0.0.1:${PORT}`, 'sec-fetch-site': 'cross-site', 'sec-fetch-dest': 'image' } })
+  assert.equal(crossSite.status, 401)
+
+  const noHeaders = await app.request(url, { headers: { host: `127.0.0.1:${PORT}` } })
+  assert.equal(noHeaders.status, 401, 'curl bez nagłówków przeglądarki nadal potrzebuje tokenu')
+
+  // zapis (POST) nigdy nie przechodzi bez tokenu, nawet z tej samej strony
+  const post = await app.request(`http://127.0.0.1:${PORT}/api/generate`, { method: 'POST', headers: { host: `127.0.0.1:${PORT}`, 'sec-fetch-site': 'same-origin' } })
+  assert.equal(post.status, 401)
+})
+
+test('„Moje pliki” nie duplikuje się przy wielu wrzutach', async () => {
+  await call('/api/uploads', { method: 'POST', body: JSON.stringify({ base64: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(32, 91)]).toString('base64'), name: 'a.png' }) })
+  await call('/api/uploads', { method: 'POST', body: JSON.stringify({ base64: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(32, 92)]).toString('base64'), name: 'b.png' }) })
+  const all = (await (await call('/api/boards')).json()).boards.filter((b) => b.system === 'uploads')
+  assert.equal(all.length, 1)
 })

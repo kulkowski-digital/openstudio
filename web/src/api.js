@@ -43,13 +43,16 @@ export const api = {
   removeKey: () => call('/api/key', { method: 'DELETE' }),
   settings: (patch) => call('/api/settings', { method: 'POST', body: JSON.stringify(patch) }),
   price: (modelId, values) => call('/api/price', { method: 'POST', body: JSON.stringify({ modelId, values }) }),
-  generate: (modelId, values, pinIds, styleId) => call('/api/generate', { method: 'POST', body: JSON.stringify({ modelId, values, pinIds, styleId }) }),
+  generate: (modelId, values, references, styleId) => call('/api/generate', { method: 'POST', body: JSON.stringify({ modelId, values, references, styleId }) }),
+  upload: (payload) => call('/api/uploads', { method: 'POST', body: JSON.stringify(payload) }),
+  deleteFile: (id) => call(`/api/jobs/${id}/file`, { method: 'DELETE' }),
+  openFolder: (which) => call('/api/open-folder', { method: 'POST', body: JSON.stringify({ which }) }),
   styles: () => call('/api/styles'),
   saveStyle: (style) => call('/api/styles', { method: 'POST', body: JSON.stringify(style) }),
   deleteStyle: (id) => call(`/api/styles/${id}`, { method: 'DELETE' }),
   importStyle: (payload) => call('/api/styles/import', { method: 'POST', body: JSON.stringify(payload) }),
-  styleExportUrl: (id) => `/api/styles/${id}/export?t=${encodeURIComponent(TOKEN)}`,
-  promptPreview: (prompt, styleId) => call('/api/prompt-preview', { method: 'POST', body: JSON.stringify({ prompt, styleId }) }),
+  styleExportUrl: (id) => `/api/styles/${id}/export`,
+  promptPreview: (prompt, styleId, references, modelId) => call('/api/prompt-preview', { method: 'POST', body: JSON.stringify({ prompt, styleId, references, modelId }) }),
   boards: () => call('/api/boards'),
   createBoard: (name) => call('/api/boards', { method: 'POST', body: JSON.stringify({ name }) }),
   deleteBoard: (id) => call(`/api/boards/${id}`, { method: 'DELETE' }),
@@ -63,6 +66,8 @@ export const api = {
   doctor: () => call('/api/doctor'),
   ledger: () => call('/api/ledger'),
   fileUrl: (p) => `/api/file?path=${encodeURIComponent(p)}&t=${encodeURIComponent(TOKEN)}`,
+  // Do otwarcia w nowej karcie: bez tokenu, żeby nie lądował w pasku adresu ani na zrzutach ekranu.
+  fileLink: (p) => `/api/file?path=${encodeURIComponent(p)}`,
 }
 
 /** Zdarzenia na żywo (postęp zadań). EventSource nie umie nagłówków, stąd token w URL-u. */

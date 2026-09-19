@@ -219,8 +219,8 @@ function PaletteStep({ draft, set, pins }) {
       {pins.length === 0 ? (
         <Alert kind="info">Najpierw wrzuć kilka inspiracji na Tablice — stamtąd bierzemy paletę. Możesz też po prostu wkleić swoje HEX-y niżej.</Alert>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {pins.slice(0, 24).map((pin) => {
+        <div className="flex flex-wrap gap-2 max-h-56 overflow-auto">
+          {pins.map((pin) => {
             const on = source.has(pin.id)
             return (
               <button key={pin.id}
@@ -363,8 +363,8 @@ function ReferencesStep({ draft, set, pins, models, catalog }) {
         {pins.length === 0 ? (
           <p className="text-xs text-muted">Brak inspiracji na tablicach — styl będzie działał samym opisem i paletą.</p>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {pins.slice(0, 24).map((pin) => {
+          <div className="flex flex-wrap gap-2 max-h-56 overflow-auto">
+            {pins.map((pin) => {
               const on = chosen.has(pin.id)
               return (
                 <button key={pin.id}

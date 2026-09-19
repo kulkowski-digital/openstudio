@@ -55,18 +55,8 @@ export default function Field({ field, value, onChange, disabled }) {
     )
   }
 
-  if (field.type === 'images') {
-    // Pełna obsługa referencji wchodzi z Tablicami (Faza 2). Tu tylko uczciwy komunikat.
-    return (
-      <div>
-        <Label hint={field.help}>{field.label}</Label>
-        <div className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-muted">
-          Wysyłanie własnych obrazów pojawi się razem z Tablicami.
-          Na razie wybierz model „z tekstu”.
-        </div>
-      </div>
-    )
-  }
+  // Pola typu `images` rysuje generator (panel obrazów z rolami), nie ten komponent.
+  if (field.type === 'images') return null
 
   return (
     <div>

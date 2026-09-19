@@ -40,3 +40,9 @@ Modele „z tekstu” nie przyjmują obrazów, więc referencje stylu są wtedy 
 
 ### Kolory z palety nie zgadzają się co do odcienia
 Tak działają modele obrazu: kod koloru traktują jak wskazówkę, nie jak farbę z puszki. Paleta przesuwa całość w Twoją stronę. Jeśli potrzebujesz dokładnego koloru marki, popraw go później w edytorze graficznym.
+
+### Chcę wstawić swoje zdjęcie albo logo, nie tylko inspiracje
+W generatorze, przy modelu „z inspiracji”, jest panel **Obrazy do tej generacji**. Wrzuć plik i wybierz rolę: *osoba* (model zachowa twarz), *logo* (wstawi bez zmian), *produkt*, *tło*, *obraz do edycji* albo *własna instrukcja* (piszesz sam). Kolejność na liście to kolejność, w jakiej model dostaje obrazy — i w tej samej kolejności są opisane w prompcie.
+
+### Model zignorował moje logo / zmienił twarz
+Sprawdź „pokaż pełny prompt”: czy obraz ma właściwą rolę i numer. Modele obrazu bywają uparte — pomaga krótsza lista obrazów (2–3 zamiast 8), dopisanie uwagi przy roli („logo w prawym dolnym rogu, małe”) i wariant Sunburst, który precyzyjniej trzyma się instrukcji.

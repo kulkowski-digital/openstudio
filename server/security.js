@@ -34,6 +34,12 @@ function timingSafeEqual(a = '', b = '') {
 }
 
 const ALLOWED_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
+const READ_ONLY_FILES = /^\/api\/(file|styles\/[^/]+\/export)$/
+
+function isSameOriginRead(c) {
+  const site = c.req.header('sec-fetch-site')
+  return site === 'same-origin' || site === 'none'
+}
 
 /**
  * Aplikacja na localhondzie wydaje prawdziwe pieniądze, więc jest łakomym celem
@@ -64,6 +70,11 @@ export function guard({ token, port }) {
     if (!isApi) return next()
 
     const given = c.req.header('x-openstudio-token') || url.searchParams.get('t') || ''
+    // Odczyt własnych plików (miniatury, „otwórz w nowej karcie”, pobranie stylu)
+    // może iść bez tokenu w adresie, jeśli przeglądarka zaświadcza, że żądanie
+    // pochodzi z tej samej strony. Dzięki temu token nie ląduje w pasku adresu
+    // ani w zrzutach ekranu. Obca witryna ma tu zawsze `cross-site`.
+    if (c.req.method === 'GET' && READ_ONLY_FILES.test(url.pathname) && isSameOriginRead(c)) return next()
     if (!timingSafeEqual(given, token)) {
       return c.json({ error: 'Brak ważnego tokenu sesji. Otwórz aplikację ponownie linkiem z terminala.' }, 401)
     }
