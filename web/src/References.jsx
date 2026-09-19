@@ -13,6 +13,7 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
   const [error, setError] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [link, setLink] = useState('')
+  const [pending, setPending] = useState([])   // pliki w trakcie wgrywania: {id, name, previewUrl}
 
   const isOverlay = (r) => roles.find((x) => x.value === r.role)?.overlay
   const modelRefs = refs.filter((r) => !isOverlay(r))
@@ -22,25 +23,33 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
 
   const addFiles = useCallback(async (files) => {
     setError(null)
-    const added = []
-    for (const file of files) {
+    // Wgrywanie trwa kilka sekund — od razu pokazujemy wpis „wgrywam…” z lokalnym
+    // podglądem, żeby nie było wrażenia, że nic się nie stało.
+    const placeholders = files.map((file) => ({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: file.name, previewUrl: URL.createObjectURL(file) }))
+    setPending((prev) => [...prev, ...placeholders])
+    for (const [i, file] of files.entries()) {
       setBusy((n) => n + 1)
       try {
         const prepared = await prepareImage(file)
         const res = await api.upload(prepared)
-        added.push({ pin: res.pin, role: guessRole(file.name), note: '' })
+        const entry = { pin: res.pin, role: guessRole(file.name), note: '' }
+        onChange((prev) => (prev.some((r) => r.pin.id === entry.pin.id) ? prev : [...prev, entry]))
       } catch (err) {
         setError(err.message)
       } finally {
         setBusy((n) => n - 1)
+        const ph = placeholders[i]
+        setPending((prev) => prev.filter((x) => x.id !== ph.id))
+        URL.revokeObjectURL(ph.previewUrl)
       }
     }
-    if (added.length) onChange((prev) => [...prev, ...added.filter((a) => !prev.some((r) => r.pin.id === a.pin.id))])
   }, [onChange])
 
   const addUrl = useCallback(async (url) => {
     setError(null)
     setBusy((n) => n + 1)
+    const ph = { id: `${Date.now()}-url`, name: url.replace(/^https?:\/\//, '').slice(0, 40), previewUrl: null }
+    setPending((prev) => [...prev, ph])
     try {
       const res = await api.upload({ url })
       onChange((prev) => (prev.some((r) => r.pin.id === res.pin.id) ? prev : [...prev, { pin: res.pin, role: 'inspiracja', note: '' }]))
@@ -48,6 +57,7 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
       setError(err.message)
     } finally {
       setBusy((n) => n - 1)
+      setPending((prev) => prev.filter((x) => x.id !== ph.id))
     }
   }, [onChange])
 
@@ -103,7 +113,7 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
         </div>
       </div>
 
-      {refs.length === 0 ? (
+      {refs.length === 0 && pending.length === 0 ? (
         <p className="text-xs text-muted leading-relaxed">
           Wrzuć tu swoje zdjęcie, logo albo produkt (przeciągnij, <span className="font-mono">Cmd/Ctrl+V</span> albo „dodaj własny plik”).
           Logo najlepiej jako <b>logo (nakładka)</b> — wtedy nakładamy oryginalny plik po generacji, bez artefaktów i bez kredytów.
@@ -169,6 +179,17 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
               </li>
             )
           })}
+          {pending.map((ph) => (
+            <li key={ph.id} className="flex gap-3 items-center rounded-lg border border-dashed border-line bg-panel-2/40 p-2 opacity-80">
+              {ph.previewUrl
+                ? <img src={ph.previewUrl} alt="" className="w-16 h-16 rounded-md object-cover border border-line" />
+                : <div className="w-16 h-16 rounded-md border border-line bg-panel-2" />}
+              <div className="flex items-center gap-2 text-xs text-muted">
+                <Spinner className="text-cyan" />
+                wgrywam… <span className="font-mono text-[11px] truncate max-w-56">{ph.name}</span>
+              </div>
+            </li>
+          ))}
         </ol>
       )}
 
