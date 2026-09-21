@@ -28,7 +28,9 @@ export default function KeyGate({ onSaved }) {
   return (
     <div className="min-h-full flex items-center justify-center p-6">
       <Card className="w-full max-w-xl p-8 relative">
-        <h1 className="h-display text-3xl mb-2">openstudio</h1>
+        <h1 className="mb-4">
+          <img src="/logo.png" alt="OpenStudio" className="h-14 w-auto" />
+        </h1>
         <p className="text-muted text-sm leading-relaxed mb-6">
           Twoje własne studio AI do obrazów. Płacisz tylko za to, co naprawdę wygenerujesz,
           a wszystkie pliki zostają na Twoim dysku.

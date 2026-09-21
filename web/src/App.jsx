@@ -110,7 +110,7 @@ export default function App() {
     <div className="min-h-full">
       <header className="border-b border-line">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-6">
-          <span className="h-display text-xl">openstudio</span>
+          <img src="/logo.png" alt="OpenStudio" className="h-8 w-auto shrink-0" />
           <nav className="flex gap-1">
             {TABS.map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)}

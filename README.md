@@ -1,4 +1,9 @@
-# OpenStudio
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo.png">
+    <img src="docs/logo-light.png" alt="OpenStudio — by kulkowski" width="440">
+  </picture>
+</p>
 
 **Twoje własne studio AI do obrazów. Wklejasz swój klucz API, płacisz tylko za to, co naprawdę wygenerujesz, a wszystkie pliki zostają na Twoim dysku.**
 
