@@ -1,6 +1,6 @@
 # Jak zdobyć klucz API (5 minut)
 
-1. Wejdź na [kie.ai/api-key](https://kie.ai/api-key?ref=openstudio) ([wersja bez linku polecającego](https://kie.ai/api-key)) i załóż konto.
+1. Wejdź na [kie.ai](https://kie.ai?ref=e0629a803712280df41ecba044a8cdf4) ([wersja bez linku polecającego](https://kie.ai)) i załóż konto.
 2. Doładuj konto najmniejszą kwotą, jaka jest dostępna. Jedna grafika w jakości 1K to około **6 kredytów** — na próby wystarczy naprawdę niewiele.
 3. Na stronie „API Key” kliknij **Create / Copy**. Klucz to długi ciąg znaków.
 4. Wróć do OpenStudio i wklej go w jedyne pole na ekranie. Aplikacja od razu sprawdzi, czy działa, i pokaże saldo.

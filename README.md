@@ -37,7 +37,7 @@ To wersja 2. Na razie działa `npx`.
 
 ## Skąd wziąć klucz
 
-Zobacz [docs/JAK-ZDOBYC-KLUCZ.md](docs/JAK-ZDOBYC-KLUCZ.md). W skrócie: konto na [kie.ai](https://kie.ai/api-key?ref=openstudio) ([link bez polecenia](https://kie.ai/api-key)), doładowanie dowolnie małą kwotą, skopiowanie klucza ze strony „API Key”.
+Zobacz [docs/JAK-ZDOBYC-KLUCZ.md](docs/JAK-ZDOBYC-KLUCZ.md). W skrócie: konto na [kie.ai](https://kie.ai?ref=e0629a803712280df41ecba044a8cdf4) ([link bez polecenia](https://kie.ai)), doładowanie dowolnie małą kwotą, skopiowanie klucza ze strony [„API Key”](https://kie.ai/api-key).
 
 > Link z `?ref=` to link polecający — jeśli z niego skorzystasz, wspierasz rozwój projektu. Obok zawsze jest link zwykły. Nic nie jest ukryte w kodzie.
 

@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { api } from './api.js'
 import { Alert, Card, Label, Spinner } from './ui.jsx'
 
-const KIE_SIGNUP = 'https://kie.ai/api-key?ref=openstudio'
+// Link polecający prowadzi na stronę główną kie.ai — tam siedzi rejestracja.
+// Link zwykły celuje od razu w „API Key”, bo to jedyna strona, po którą tam wracasz.
+const KIE_SIGNUP = 'https://kie.ai?ref=e0629a803712280df41ecba044a8cdf4'
 const KIE_PLAIN = 'https://kie.ai/api-key'
 
 /** Pierwszy ekran: jedno pole i trzy kroki. Nic więcej nie może tu być. */
@@ -36,9 +38,27 @@ export default function KeyGate({ onSaved }) {
           a wszystkie pliki zostają na Twoim dysku.
         </p>
 
+        {/* Bez konta u dostawcy ten ekran jest ślepą uliczką, a pole na klucz samo tego nie mówi.
+            Dlatego „załóż konto" jest tu przyciskiem, nie odnośnikiem w przypisie na dole. */}
+        <a
+          href={KIE_SIGNUP}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center justify-center gap-2 w-full rounded-full border-2 border-cyan text-cyan font-display font-extrabold text-base py-3.5 no-underline transition hover:bg-cyan/10"
+        >
+          Załóż konto na KIE
+          <span aria-hidden="true">↗</span>
+        </a>
+        <p className="text-xs text-muted text-center mt-2 mb-6 leading-relaxed">
+          Link polecający — wspiera ten projekt. Wolisz bez?{' '}
+          <a className="underline" href={KIE_PLAIN} target="_blank" rel="noreferrer">wejdź bez polecenia</a>.
+        </p>
+
         <ol className="text-sm text-muted space-y-2 mb-6">
-          <li><span className="text-cyan font-semibold">1.</span> Załóż konto na kie.ai i doładuj je choćby najmniejszą kwotą.</li>
-          <li><span className="text-cyan font-semibold">2.</span> Skopiuj klucz API ze strony „API Key”.</li>
+          <li><span className="text-cyan font-semibold">1.</span> Załóż konto powyżej i doładuj je choćby najmniejszą kwotą.</li>
+          <li><span className="text-cyan font-semibold">2.</span> Skopiuj klucz API ze strony{' '}
+            <a className="text-cyan underline" href={KIE_PLAIN} target="_blank" rel="noreferrer">„API Key”</a>.
+          </li>
           <li><span className="text-cyan font-semibold">3.</span> Wklej go poniżej. Sprawdzimy od razu, czy działa.</li>
         </ol>
 
@@ -67,9 +87,8 @@ export default function KeyGate({ onSaved }) {
         </form>
 
         <p className="text-xs text-muted mt-6 leading-relaxed">
-          Nie masz klucza? <a className="text-cyan underline" href={KIE_SIGNUP} target="_blank" rel="noreferrer">Załóż konto na kie.ai</a>{' '}
-          <span className="opacity-70">(link polecający — wspiera ten projekt)</span>{' '}
-          albo wejdź <a className="text-muted underline" href={KIE_PLAIN} target="_blank" rel="noreferrer">bez polecenia</a>.
+          Jedna grafika w jakości 1K to około 6 kredytów, więc na pierwsze próby wystarczy
+          najmniejsze doładowanie. Projekt jest niezależny — płacisz bezpośrednio dostawcy.
         </p>
       </Card>
     </div>
