@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "id": "grok-imagine-image-2-0-text-to-image",
+  "provider": "kie",
+  "model": "grok-imagine-image-2-0/text-to-image",
+  "title": "Grok Imagine 2.0",
+  "subtitle": "Model xAI. Najtańszy w tym katalogu — jedna cena, bez wyboru jakości.",
+  "kind": "t2i",
+  "recommended": false,
+  "badges": [
+    "najtańszy",
+    "5 formatów",
+    "bez wyboru jakości"
+  ],
+  "refs": {
+    "max": 0,
+    "mode": "none"
+  },
+  "typicalSeconds": 45,
+  "pricing": {
+    "unit": "credits",
+    "by": "flat",
+    "values": {
+      "flat": 4
+    },
+    "estimated": {
+      "flat": true
+    }
+  },
+  "fields": [
+    {
+      "name": "prompt",
+      "label": "Co ma być na obrazie?",
+      "type": "textarea",
+      "required": true,
+      "maxLength": 8000,
+      "placeholder": "Plakat klubu nad morzem w stylu vintage, ciepła paleta, gruby papier",
+      "help": "Pisz jak do grafika: co widać, w jakim stylu, jakie kolory. Im konkretniej, tym lepiej."
+    },
+    {
+      "name": "aspect_ratio",
+      "label": "Format",
+      "type": "select",
+      "default": "1:1",
+      "options": [
+        {
+          "value": "1:1",
+          "label": "Kwadrat 1:1",
+          "hint": "post, awatar"
+        },
+        {
+          "value": "3:2",
+          "label": "Poziomy 3:2"
+        },
+        {
+          "value": "2:3",
+          "label": "Pionowy 2:3"
+        },
+        {
+          "value": "16:9",
+          "label": "Panorama 16:9",
+          "hint": "miniatura YouTube"
+        },
+        {
+          "value": "9:16",
+          "label": "Pion 9:16",
+          "hint": "Stories, Reels"
+        }
+      ],
+      "help": "Ten model ma tylko pięć formatów i nie umie „automatycznego”."
+    },
+    {
+      "name": "count",
+      "label": "Ile wersji naraz",
+      "type": "number",
+      "default": 1,
+      "min": 1,
+      "max": 8,
+      "clientOnly": true,
+      "affectsPrice": true,
+      "help": "Model robi jeden obraz na raz — aplikacja wyśle tyle osobnych zadań i policzy koszt razy tyle."
+    }
+  ]
+}

@@ -1,8 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import {
   loadModels, validateManifest, defaultValues, validateValues,
-  priceFor, buildInput, countOf, calibrationKey,
+  priceFor, buildInput, countOf, calibrationKey, imagesFieldName, MODELS_DIR,
 } from '../server/models.js'
 
 const { models, problems } = loadModels()
@@ -11,7 +12,40 @@ const flareI2I = models.find((m) => m.id === 'gpt-image-2-5-flare-image-to-image
 
 test('wszystkie manifesty w repo są poprawne', () => {
   assert.deepEqual(problems, [])
-  assert.equal(models.length, 4)
+  // Liczba wprost z katalogu, nie wpisana na sztywno: dodanie modelu PR-em nie
+  // ma wywracać testu, ale plik, który się nie ładuje, ma go wywrócić.
+  const files = fs.readdirSync(MODELS_DIR).filter((f) => f.endsWith('.json'))
+  assert.equal(models.length, files.length)
+  assert.ok(models.length >= 4)
+})
+
+test('każdy model i2i mówi, pod jaką nazwą dostawca chce obrazy', () => {
+  for (const m of models.filter((x) => x.kind === 'i2i')) {
+    const name = imagesFieldName(m)
+    assert.ok(name, `${m.id}: brak pola typu images`)
+    // Nazwa pola JEST nazwą parametru u dostawcy — różni się model po modelu.
+    assert.ok(['input_urls', 'image_input', 'image_urls'].includes(name), `${m.id}: nieznana nazwa „${name}”`)
+  }
+  assert.equal(imagesFieldName(models.find((m) => m.kind === 't2i')), null)
+})
+
+test('model bez wyboru jakości ma jedną cenę pod kluczem flat', () => {
+  const grok = models.find((m) => m.id === 'grok-imagine-image-2-0-text-to-image')
+  assert.ok(grok, 'brak manifestu Grok Imagine')
+  assert.equal(grok.fields.some((f) => f.name === 'resolution'), false)
+  const p = priceFor(grok, { ...defaultValues(grok), count: 3 })
+  assert.equal(p.perImage, 4)
+  assert.equal(p.credits, 12)
+  assert.equal(p.estimated, true)
+})
+
+test('kalibracja działa też przy cenie flat', () => {
+  const grok = models.find((m) => m.id === 'grok-imagine-image-2-0-text-to-image')
+  const values = defaultValues(grok)
+  const cal = { [calibrationKey(grok, values)]: { credits: 5 } }
+  const p = priceFor(grok, values, cal)
+  assert.equal(p.perImage, 5)
+  assert.equal(p.estimated, false)
 })
 
 test('zły manifest jest odrzucany z czytelnym błędem', () => {

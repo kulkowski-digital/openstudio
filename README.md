@@ -43,7 +43,7 @@ Zobacz [docs/JAK-ZDOBYC-KLUCZ.md](docs/JAK-ZDOBYC-KLUCZ.md). W skrócie: konto n
 
 ## Co potrafi (v1)
 
-- **Generowanie obrazów** modelami GPT Image 2.5 (Flare i Sunburst), 1K / 2K / 4K, 13 formatów.
+- **Generowanie obrazów** kilkoma modelami do wyboru: GPT Image 2.5 (Flare i Sunburst), **Nano Banana 2** (Gemini 3.1 Flash Image) i **Grok Imagine 2.0** (najtańszy, jedna cena za obraz). Każdy w wariancie „z tekstu” i „z inspiracji”; formularz, formaty i limit referencji biorą się z manifestu modelu, nie z kodu.
 - **Cena przed kliknięciem** — na przycisku widzisz, ile kredytów zapłacisz. Po każdej generacji aplikacja kalibruje cennik prawdziwym kosztem zwróconym przez API.
 - **Limit wydatków na 30 dni** — blokada *zanim* cokolwiek pójdzie do dostawcy.
 - **Kolejka**, która przeżywa zamknięcie aplikacji: niedokończone zadania wracają do sprawdzania po restarcie.
@@ -93,7 +93,9 @@ Zalecenie: załóż u dostawcy **osobny klucz** tylko dla tej aplikacji, żeby m
 
 ## Dodanie nowego modelu (bez pisania kodu)
 
-Jeden model = jeden plik JSON w [`models/`](models/). Formularz w aplikacji buduje się z tego pliku sam. Opis pól: [`models/README.md`](models/README.md). Pull requesty mile widziane — CI sprawdza poprawność manifestu.
+Jeden model = jeden plik JSON w [`models/`](models/). Formularz w aplikacji buduje się z tego pliku sam — razem z formatami, jakością, cennikiem i limitem obrazów referencyjnych. Tak dołożyliśmy Nano Banana 2 i Grok Imagine 2.0: bez jednej linijki w `server/`.
+
+Opis pól: [`models/README.md`](models/README.md). Pull requesty mile widziane — CI sprawdza poprawność manifestu.
 
 ## Komendy
 
@@ -121,7 +123,7 @@ MIT. Projekt **niezależny**, niepowiązany z Kie.ai ani z żadnym dostawcą mod
 
 ## English summary
 
-**OpenStudio is a local, open-source image studio that runs on your own API key.** No subscription, no wasted credits, no account on yet another service: you paste a [Kie.ai](https://kie.ai/api-key) key, generate with GPT Image 2.5, and every file stays on your disk (`~/OpenStudio/`).
+**OpenStudio is a local, open-source image studio that runs on your own API key.** No subscription, no wasted credits, no account on yet another service: you paste a [Kie.ai](https://kie.ai/api-key) key, generate with GPT Image 2.5, Nano Banana 2 or Grok Imagine 2.0, and every file stays on your disk (`~/OpenStudio/`).
 
 - **Price before you click** — calibrated from the real `creditsConsumed` returned by the API; optional 30-day spending cap enforced *before* anything is sent.
 - **Boards** — a Pinterest-like moodboard. Drop files, paste from clipboard, drag from another tab or paste a URL; select 3–4 pins and hit *generate in this vibe*. Pins are uploaded lazily, only when used, once per file.

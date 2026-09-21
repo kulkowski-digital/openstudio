@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "id": "nano-banana-2-text-to-image",
+  "provider": "kie",
+  "model": "nano-banana-2",
+  "title": "Nano Banana 2",
+  "subtitle": "Google Gemini 3.1 Flash Image. Szybki, trzyma spójność postaci i radzi sobie z napisami.",
+  "kind": "t2i",
+  "recommended": false,
+  "badges": [
+    "spójne postacie",
+    "do 4K",
+    "15 formatów"
+  ],
+  "refs": {
+    "max": 0,
+    "mode": "none"
+  },
+  "typicalSeconds": 45,
+  "pricing": {
+    "unit": "credits",
+    "by": "resolution",
+    "values": {
+      "1K": 8,
+      "2K": 12,
+      "4K": 18
+    },
+    "estimated": {
+      "1K": true,
+      "2K": true,
+      "4K": true
+    }
+  },
+  "fields": [
+    {
+      "name": "prompt",
+      "label": "Co ma być na obrazie?",
+      "type": "textarea",
+      "required": true,
+      "maxLength": 20000,
+      "placeholder": "Plakat z napisem „PIECZARA”, ciemne tło, cyjanowa poświata, minimalizm",
+      "help": "Pisz jak do grafika: co widać, w jakim stylu, jakie kolory. Im konkretniej, tym lepiej."
+    },
+    {
+      "name": "aspect_ratio",
+      "label": "Format",
+      "type": "select",
+      "default": "1:1",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Automatyczny"
+        },
+        {
+          "value": "1:1",
+          "label": "Kwadrat 1:1",
+          "hint": "post, awatar"
+        },
+        {
+          "value": "3:2",
+          "label": "Poziomy 3:2"
+        },
+        {
+          "value": "2:3",
+          "label": "Pionowy 2:3"
+        },
+        {
+          "value": "4:3",
+          "label": "Poziomy 4:3"
+        },
+        {
+          "value": "3:4",
+          "label": "Pionowy 3:4"
+        },
+        {
+          "value": "5:4",
+          "label": "Poziomy 5:4"
+        },
+        {
+          "value": "4:5",
+          "label": "Pionowy 4:5",
+          "hint": "post na Instagramie"
+        },
+        {
+          "value": "16:9",
+          "label": "Panorama 16:9",
+          "hint": "miniatura YouTube"
+        },
+        {
+          "value": "9:16",
+          "label": "Pion 9:16",
+          "hint": "Stories, Reels"
+        },
+        {
+          "value": "21:9",
+          "label": "Ultraszeroki 21:9"
+        },
+        {
+          "value": "4:1",
+          "label": "Baner poziomy 4:1"
+        },
+        {
+          "value": "1:4",
+          "label": "Baner pionowy 1:4"
+        },
+        {
+          "value": "8:1",
+          "label": "Pasek poziomy 8:1"
+        },
+        {
+          "value": "1:8",
+          "label": "Pasek pionowy 1:8"
+        }
+      ]
+    },
+    {
+      "name": "resolution",
+      "label": "Jakość",
+      "type": "select",
+      "default": "1K",
+      "affectsPrice": true,
+      "options": [
+        {
+          "value": "1K",
+          "label": "1K — tani test",
+          "hint": "najtaniej, do sprawdzenia pomysłu"
+        },
+        {
+          "value": "2K",
+          "label": "2K — do publikacji"
+        },
+        {
+          "value": "4K",
+          "label": "4K — do druku",
+          "hint": "najdrożej i najwolniej"
+        }
+      ]
+    },
+    {
+      "name": "output_format",
+      "label": "Format pliku",
+      "type": "select",
+      "default": "jpg",
+      "advanced": true,
+      "options": [
+        {
+          "value": "jpg",
+          "label": "JPG",
+          "hint": "lżejszy plik, dobry do zdjęć"
+        },
+        {
+          "value": "png",
+          "label": "PNG",
+          "hint": "bez strat, dobry do grafik z napisami"
+        }
+      ]
+    },
+    {
+      "name": "count",
+      "label": "Ile wersji naraz",
+      "type": "number",
+      "default": 1,
+      "min": 1,
+      "max": 8,
+      "clientOnly": true,
+      "affectsPrice": true,
+      "help": "Model robi jeden obraz na raz — aplikacja wyśle tyle osobnych zadań i policzy koszt razy tyle."
+    }
+  ]
+}

@@ -71,6 +71,16 @@ export function loadModels(dir = MODELS_DIR) {
   return { models, problems }
 }
 
+/**
+ * Pole, do którego wpisujemy adresy wysłanych referencji. Nazwa pola jest
+ * jednocześnie nazwą parametru u dostawcy (patrz `buildInput`), a ta różni się
+ * model po modelu: `input_urls` w GPT Image, `image_input` w Nano Banana 2,
+ * `image_urls` w Grok Imagine. Dlatego pytamy o nią manifest, a nie zgadujemy.
+ */
+export function imagesFieldName(manifest) {
+  return manifest?.fields?.find((f) => f.type === 'images')?.name ?? null
+}
+
 /** Domyślne wartości formularza prosto z manifestu. */
 export function defaultValues(manifest) {
   const out = {}
@@ -130,10 +140,12 @@ export function priceFor(manifest, values = {}, calibration = {}) {
   const key = calibrationKey(manifest, values)
   const cal = calibration[key]
   const res = values.resolution ?? manifest.fields.find((f) => f.name === 'resolution')?.default
-  const fromManifest = manifest.pricing?.values?.[res]
+  // Model bez wyboru jakości (np. Grok Imagine) ma jedną cenę pod kluczem `flat`.
+  const fromManifest = res == null ? manifest.pricing?.values?.flat : manifest.pricing?.values?.[res]
   const perImage = cal?.credits ?? fromManifest ?? null
   const count = countOf(manifest, values)
-  const estimated = cal ? false : (manifest.pricing?.estimated?.[res] ?? perImage == null)
+  const estimatedFor = res == null ? manifest.pricing?.estimated?.flat : manifest.pricing?.estimated?.[res]
+  const estimated = cal ? false : (estimatedFor ?? perImage == null)
   return {
     credits: perImage == null ? null : perImage * count,
     perImage,

@@ -93,7 +93,7 @@ test('z tokenem /api/state zwraca katalog modeli i NIE zwraca klucza', async () 
   const res = await call('/api/state')
   assert.equal(res.status, 200)
   const body = await res.json()
-  assert.equal(body.models.length, 4)
+  assert.ok(body.models.length >= 4, 'katalog modeli musi dojechać do przeglądarki')
   assert.equal(body.config.hasApiKey, false)
   assert.ok(!JSON.stringify(body).includes('apiKey"'), 'klucz nie może iść do przeglądarki')
 })
@@ -233,6 +233,27 @@ test('„Generuj w tym klimacie”: inspiracje trafiają do modelu jako input_ur
   assert.equal(state.lastInput.input_urls.length, 2)
   assert.deepEqual(readJobs().find((j) => j.id === jobs[0].id).pinIds.length, 2)
   assert.ok(p2)
+})
+
+test('nazwa pola obrazów idzie z manifestu — Nano Banana 2 chce image_input', async () => {
+  const pins = (await (await call('/api/boards')).json()).boards[0].pins
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({
+      modelId: 'nano-banana-2-image-to-image',
+      values: { prompt: 'to samo, ale nocą', aspect_ratio: '1:1', resolution: '1K', count: 1 },
+      pinIds: pins.slice(0, 1).map((p) => p.id),
+    }),
+  })
+  assert.equal(res.status, 200)
+  const { jobs } = await res.json()
+  await waitFor(() => readJobs().find((j) => j.id === jobs[0].id)?.status === 'done', 15000)
+
+  // Gdyby serwer nadal wpisywał adresy na sztywno w `input_urls`, model
+  // dostałby prompt bez obrazów i po cichu zrobiłby coś zupełnie innego.
+  assert.equal(state.lastInput.input_urls, undefined)
+  assert.ok(Array.isArray(state.lastInput.image_input))
+  assert.equal(state.lastInput.image_input.length, 1)
 })
 
 test('drugie użycie tych samych inspiracji nie wysyła ich ponownie', async () => {

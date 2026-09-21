@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { Hono } from 'hono'
 import { guard } from './security.js'
 import { KieProvider } from './providers/kie.js'
-import { loadModels, validateValues, priceFor, defaultValues } from './models.js'
+import { loadModels, validateValues, priceFor, defaultValues, imagesFieldName } from './models.js'
 import {
   readConfig, writeConfig, publicConfig, readJobs, getJob, upsertJob,
   readLedger, creditsLast30Days, libraryItems,
@@ -170,7 +170,10 @@ export function createApp({ token, port }) {
     if (styleId && !style) return { error: 'Wybrany styl już nie istnieje.', status: 400 }
 
     const finalValues = { ...(values || {}) }
-    delete finalValues.input_urls
+    // Adresy referencji nadaje serwer po wysłaniu plików — to, co przyszło
+    // z przeglądarki, jest bez znaczenia i nie może trafić do API.
+    const imagesField = imagesFieldName(manifest)
+    if (imagesField) delete finalValues[imagesField]
     const userPrompt = finalValues.prompt
 
     // Domyślne ustawienia stylu uzupełniają tylko to, czego nie podał użytkownik —
@@ -208,7 +211,7 @@ export function createApp({ token, port }) {
           optional: new Set(styleRefs.map((r) => r.pinId)),
         })
         usedRefs = resolved.usedPinIds.map((id) => wanted.find((r) => r.pinId === id))
-        finalValues.input_urls = resolved.urls
+        finalValues[imagesField] = resolved.urls
       } catch (err) {
         return { error: err.human || err.message, status: 400 }
       }

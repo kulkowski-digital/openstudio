@@ -18,5 +18,7 @@
 | GPT Image 2.5 Flare, 1K | 6 (sprawdzone) |
 | GPT Image 2.5 Flare, 2K | ~12 (szacunek, aplikacja sama się skalibruje) |
 | GPT Image 2.5 Flare, 4K | ~24 (szacunek) |
+| Nano Banana 2, 1K / 2K / 4K | ~8 / ~12 / ~18 (z cennika dostawcy) |
+| Grok Imagine 2.0, dowolny format | ~4 (z cennika dostawcy) |
 
 Po każdej generacji aplikacja zapisuje prawdziwy koszt zwrócony przez API, więc cena na przycisku z czasem staje się dokładna.

@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "id": "grok-imagine-image-2-0-image-to-image",
+  "provider": "kie",
+  "model": "grok-imagine-image-2-0/image-edit",
+  "title": "Grok Imagine 2.0 — z inspiracji",
+  "subtitle": "Edycja i przeróbka na podstawie Twoich obrazów (do 5). Ta sama cena co wersja z tekstu.",
+  "kind": "i2i",
+  "recommended": false,
+  "badges": [
+    "najtańszy",
+    "do 5 inspiracji",
+    "edycja obrazu"
+  ],
+  "refs": {
+    "max": 5,
+    "mode": "multi"
+  },
+  "typicalSeconds": 45,
+  "pricing": {
+    "unit": "credits",
+    "by": "flat",
+    "values": {
+      "flat": 4
+    },
+    "estimated": {
+      "flat": true
+    }
+  },
+  "fields": [
+    {
+      "name": "prompt",
+      "label": "Co mamy z tym zrobić?",
+      "type": "textarea",
+      "required": true,
+      "maxLength": 8000,
+      "placeholder": "Podmień napis na okładce na „Kie.ai Creative Studio”, resztę zostaw",
+      "help": "Pisz jak do grafika: co widać, w jakim stylu, jakie kolory. Im konkretniej, tym lepiej."
+    },
+    {
+      "name": "image_urls",
+      "label": "Inspiracje / obraz do edycji",
+      "type": "images",
+      "required": true,
+      "maxItems": 5,
+      "help": "Przeciągnij pliki albo wklej ze schowka (Cmd+V). Wysyłamy je do Kie.ai dopiero przy generacji. Ten model przyjmie najwyżej pięć obrazów."
+    },
+    {
+      "name": "aspect_ratio",
+      "label": "Format",
+      "type": "select",
+      "default": "1:1",
+      "options": [
+        {
+          "value": "1:1",
+          "label": "Kwadrat 1:1",
+          "hint": "post, awatar"
+        },
+        {
+          "value": "3:2",
+          "label": "Poziomy 3:2"
+        },
+        {
+          "value": "2:3",
+          "label": "Pionowy 2:3"
+        },
+        {
+          "value": "16:9",
+          "label": "Panorama 16:9",
+          "hint": "miniatura YouTube"
+        },
+        {
+          "value": "9:16",
+          "label": "Pion 9:16",
+          "hint": "Stories, Reels"
+        },
+        {
+          "value": "auto",
+          "label": "Automatyczny",
+          "hint": "jak w obrazie wejściowym"
+        }
+      ],
+      "help": "Ten model ma tylko pięć formatów plus „automatyczny”."
+    },
+    {
+      "name": "count",
+      "label": "Ile wersji naraz",
+      "type": "number",
+      "default": 1,
+      "min": 1,
+      "max": 8,
+      "clientOnly": true,
+      "affectsPrice": true,
+      "help": "Model robi jeden obraz na raz — aplikacja wyśle tyle osobnych zadań i policzy koszt razy tyle."
+    }
+  ]
+}
