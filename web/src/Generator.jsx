@@ -93,8 +93,27 @@ export default function Generator({
   ]
   const styleRefsAlive = (style?.referencePinIds || []).filter((id) => boards.some((b) => b.pins.some((p) => p.id === id)) && !usedRefs.some((r) => r.pin.id === id))
   const styleRefsCount = acceptsImages ? Math.max(0, Math.min(styleRefsAlive.length, maxRefs - usedRefs.length)) : 0
-  const patternPins = (style?.referencePinIds || []).map((id) => boards.flatMap((b) => b.pins).find((p) => p.id === id))
-  const styleError = patternPins.length > 0 ? !acceptsImages ? 'Wzorce stylu wymagają modelu „z inspiracji”.' : patternPins.some((p) => !p) ? 'Brakuje wzorca stylu. Popraw wybór obrazów w edycji stylu.' : modelRefs.length + (style?.referencePinIds || []).filter((id) => !modelRefs.some((r) => r.pin.id === id)).length > maxRefs ? `Wszystkie obrazy i wzorce muszą mieścić się w limicie ${maxRefs}. Usuń część lub zmień model.` : null : null
+  // Wzorce stylu bywają z dwóch źródeł i oba muszą być widoczne przed generacją:
+  // zapisane w stylu oraz nadane tu i teraz (przycisk „kolejny projekt w tym stylu”
+  // na tablicy albo ręcznie wybrana rola). Bez tego drugiego zestawu użytkownik nie
+  // wie, czy prosi o odtworzenie stylu, czy tylko o klimat.
+  const allPins = boards.flatMap((b) => b.pins)
+  const savedPatterns = (style?.referencePinIds || []).map((id) => allPins.find((p) => p.id === id) || null)
+  const adHocPatterns = usedRefs.filter((r) => r.role === 'styl').map((r) => r.pin)
+  const patternPins = [...adHocPatterns, ...savedPatterns.filter((p) => !p || !adHocPatterns.some((a) => a.id === p.id))]
+  const patternMode = patternPins.length > 0
+  // Główny wzorzec = pierwszy obraz z rolą „styl” w kolejności wysyłki; serwer
+  // liczy to tak samo (server/prompt.js), więc numer z ekranu zgadza się z promptem.
+  const primaryPattern = adHocPatterns[0] || savedPatterns.find(Boolean) || null
+
+  const styleError = (() => {
+    if (!patternMode) return null
+    if (!acceptsImages) return 'Wzorce stylu wymagają modelu „z inspiracji” — model „z tekstu” nie zobaczy tych obrazów.'
+    if (patternPins.some((p) => !p)) return 'Brakuje pliku wzorca stylu. Popraw wybór obrazów w edycji stylu.'
+    const zeStylu = (style?.referencePinIds || []).filter((id) => !modelRefs.some((r) => r.pin.id === id)).length
+    if (modelRefs.length + zeStylu > maxRefs) return `Wszystkie obrazy i wzorce muszą mieścić się w limicie ${maxRefs}. Usuń część lub zmień model.`
+    return null
+  })()
 
   // Podgląd pełnego promptu liczy serwer — tym samym kodem, którym składa go do wysyłki.
   useEffect(() => {
@@ -192,10 +211,28 @@ export default function Generator({
             </button>
           </div>
 
-          {patternPins.length > 0 && <div className="space-y-2">
-            <p className="text-xs text-muted">Wzorce stylu — typografia, kompozycja i efekty. {style.referencePriority !== 'description' ? 'Wygląd z obrazów; ogólne określenia i paleta wyłączone.' : 'Opis i paleta modyfikują wygląd wzorców.'}</p>
-            <div className="flex flex-wrap gap-2">{patternPins.filter(Boolean).map((p) => <img key={p.id} src={api.fileUrl(p.file)} alt={p.name} className="w-28 rounded-lg border border-line" />)}</div>
-            <p className="text-xs text-muted">Własną twarz dodaj jako „osoba”, a znak marki jako „logo”. Wzorce określają wygląd projektu.</p>
+          {patternMode && <div className="rounded-xl border border-cyan/40 bg-cyan/5 p-3 space-y-2">
+            <p className="text-sm font-semibold text-cyan">Tryb: kolejny projekt w tym stylu</p>
+            <p className="text-xs text-muted leading-relaxed">
+              {patternPins.filter(Boolean).length === 1 ? 'Ten obraz wyznacza' : 'Te obrazy wyznaczają'} typografię, układ, proporcje,
+              kolory i efekty. {style
+                ? (style.referencePriority !== 'description'
+                    ? 'Wygląd czytamy z obrazów — ogólne określenia i paleta ze stylu są wyłączone.'
+                    : 'Opis i paleta ze stylu świadomie modyfikują wygląd wzorców.')
+                : 'Bez zapisanego stylu — wygląd bierze się wyłącznie z tych obrazów.'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {patternPins.filter(Boolean).map((p) => (
+                <figure key={p.id} className="space-y-1">
+                  <img src={api.fileUrl(p.file)} alt={p.name} className={`w-28 rounded-lg border ${p.id === primaryPattern?.id ? 'border-cyan' : 'border-line'}`} />
+                  {p.id === primaryPattern?.id && <figcaption className="text-[10px] text-cyan font-mono text-center">główny wzorzec</figcaption>}
+                </figure>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted leading-relaxed">
+              Główny wzorzec rozstrzyga różnice w układzie między obrazami — zmienisz go strzałkami na liście niżej.
+              Własną twarz dodaj jako <b>osoba</b>, a znak marki jako <b>logo</b>: te role niosą tożsamość, wzorzec niesie wygląd.
+            </p>
           </div>}
           {styleError && <Alert kind="warn">{styleError}</Alert>}
           {showPrompt && (

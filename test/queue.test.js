@@ -161,3 +161,33 @@ test('gdy pobranie pliku padnie: koszt zapisany, zadanie czeka na „Pobierz pon
   assert.equal(fixed.status, 'done')
   assert.ok(fs.existsSync(fixed.files[0]))
 })
+
+test('nieudane sprawdzenie statusu jest widoczne, udane kasuje licznik błędów', async () => {
+  writeJobs([])
+  let padnij = true
+  const provider = {
+    constructor: { id: 'fake' },
+    async submit() { return { taskId: 'task_flaky' } },
+    async status() {
+      // Pierwsze odpytanie pada — to jest moment, w którym użytkownik widzi
+      // „generuję…” i nie wie, czy czekać, czy sprawdzać internet.
+      if (padnij) { padnij = false; const e = new Error('ETIMEDOUT'); e.human = 'Kie.ai nie odpowiedziało w ciągu 20 s.'; throw e }
+      // (błąd bez `code` = problem z siecią; z kodem = dostawca odpowiedział)
+      return { state: 'success', urls: ['https://example.test/out.png'], credits: 6, costTimeMs: 1000 }
+    },
+  }
+  const q = new Queue({ provider, models, fetchImpl: fakeFetch, concurrency: 1, pollIntervals: { min: 10, max: 20 } })
+  const [job] = q.enqueue({ modelId: 'gpt-image-2-5-flare-text-to-image', values })
+
+  await waitFor(() => (readJobs().find((j) => j.id === job.id)?.pollErrors || 0) > 0)
+  const poBledzie = readJobs().find((j) => j.id === job.id)
+  assert.equal(poBledzie.pollErrors, 1)
+  assert.match(poBledzie.pollError, /nie odpowiedziało/)
+  assert.equal(poBledzie.pollErrorKind, 'siec', 'zerwane połączenie to nie to samo co błąd od dostawcy')
+  assert.equal(poBledzie.lastStatusAt, undefined, 'nieudane odpytanie nie może udawać kontaktu z dostawcą')
+
+  await waitFor(() => readJobs().find((j) => j.id === job.id)?.status === 'done')
+  const koniec = readJobs().find((j) => j.id === job.id)
+  assert.equal(koniec.pollErrors, 0, 'udane sprawdzenie kasuje ostrzeżenie o braku łączności')
+  assert.ok(koniec.lastStatusAt, 'zapisujemy czas ostatniego UDANEGO sprawdzenia')
+})

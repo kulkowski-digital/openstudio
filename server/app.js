@@ -15,7 +15,7 @@ import { DATA_DIR, LIBRARY_DIR, SERVABLE_DIRS, ensureDataDir } from './paths.js'
 import * as boards from './boards.js'
 import { resolveReferences } from './references.js'
 import * as stylesStore from './styles.js'
-import { composePrompt } from './prompt.js'
+import { composePrompt, effectiveReferences } from './prompt.js'
 import { REFERENCE_ROLES, normalizeReferences } from './reference-roles.js'
 import * as feedback from './feedback.js'
 import { journalFor, applyProposal, dismissProposal, forgetLearned } from './style-journal.js'
@@ -249,10 +249,18 @@ export function createApp({ token, port }) {
       modelId,
       values: finalValues,
       calibration: cfg.calibration,
-      references: usedRefs.map((r) => ({ pinId: r.pinId, role: r.role, note: r.note, fromStyle: Boolean(r.fromStyle) })),
+      // Role EFEKTYWNE, czyli te, które zobaczył model — a nie te, które przyszły
+      // w żądaniu. Inaczej historia pokazuje „inspiracja” przy obrazie, o którym
+      // prompt mówił „wzorzec stylu”, i po tygodniu nie da się odtworzyć, co poszło.
+      references: effectiveReferences(usedRefs, style).map((r) => ({ pinId: r.pinId, role: r.role, note: r.note, fromStyle: Boolean(r.fromStyle) })),
       overlays,
       styleId: style?.id || null,
       styleName: style?.name || null,
+      // Migawka ustawień stylu z chwili generacji: styl można później zmienić,
+      // a wtedy historia kłamałaby o tym, na czym powstał ten konkretny obraz.
+      styleSnapshot: style
+        ? { strength: style.strength, referencePriority: style.referencePriority, referencePinIds: [...(style.referencePinIds || [])] }
+        : null,
       userPrompt,
       variantOf,
       correction,

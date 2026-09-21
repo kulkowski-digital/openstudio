@@ -202,9 +202,12 @@ export default function App() {
             activeId={activeBoardId}
             onActiveChange={setActiveBoardId}
             onChanged={load}
-            onGenerate={(chosen) => {
-              // Z tablicy wszystko wchodzi jako inspiracja; rolę zmienisz w generatorze.
-              setRefs(chosen.map((pin) => ({ pin, role: 'inspiracja', note: '' })))
+            onGenerate={(chosen, mode = 'inspiracja') => {
+              // Tryb wybrany na tablicy JEST rolą obrazów — do 21.09.2026 wszystko szło
+              // tu jako „inspiracja”, więc prośba „zrób kolejny projekt w tym stylu” nie
+              // miała jak dotrzeć do modelu, choćby użytkownik zaznaczył własne miniatury.
+              // Rolę nadal można zmienić w generatorze, ale domyślna odpowiada przyciskowi.
+              setRefs(chosen.map((pin) => ({ pin, role: mode, note: '' })))
               const model = state.models.find((m) => m.refs?.max >= chosen.length && m.recommended && m.kind === 'i2i')
                 || state.models.find((m) => m.kind === 'i2i')
               setPreferredModelId(model?.id || null)

@@ -8,7 +8,12 @@ export const REFERENCE_ROLES = [
     value: 'styl',
     label: 'wzorzec stylu',
     hint: 'typografia, układ, kolory i efekty',
-    prompt: 'Wzorzec stylu: odtwórz możliwie wiernie język graficzny tego obrazu: krój i grubość liter, proporcje i odstępy typografii, hierarchię tekstu, układ i skalę elementów, kadrowanie, paletę, kontrast, obrysy, cienie, poświaty i faktury. Zachowaj charakter projektu, a treść napisów i temat zastąp zgodnie z poleceniem użytkownika. Nie przenoś przypadkowych napisów, logo ani tożsamości osób ze wzorca.',
+    // Wyliczenie jest długie celowo. „Odtwórz typografię” model rozumie jako
+    // „daj jakiś podobny napis”; dopiero nazwane cechy (szerokość liter, podział
+    // na wiersze, kąt, gradient) wracają w wyniku. Ostatnie dwa zdania pilnują
+    // granicy, na której ten mechanizm najczęściej się wykłada: wygląd napisu
+    // przepisujemy, treść napisu bierzemy wyłącznie od użytkownika.
+    prompt: 'Wzorzec stylu: odtwórz możliwie wiernie język graficzny tego obrazu. Typografia: ten sam charakter kroju, grubość, szerokość liter (zwężone czy szerokie), wielkość liter (wersaliki czy małe), odstępy między literami i wierszami, podział napisu na wiersze, kąt nachylenia, wypełnienie (jednolite czy gradient), obrys i cień. Kompozycja: układ i hierarchia elementów, ich proporcje i skala, kadrowanie, gęstość i marginesy, miejsce przeznaczone na tekst. Kolor i wykończenie: paleta, kontrast, poświaty, faktury i szum. Zachowaj wygląd napisów, ale nie ich treść — słowa bierz wyłącznie z polecenia użytkownika. Nie przenoś ze wzorca napisów, logo ani twarzy i tożsamości osób.',
   },
   {
     value: 'inspiracja',
@@ -94,13 +99,23 @@ export function normalizeReferences(input) {
 export function describeReferences(refs = []) {
   refs = refs.filter((r) => !roleOf(r.role)?.overlay)   // nakładki nie są obrazami dla modelu
   if (!refs.length) return ''
+  // Instrukcję roli piszemy w całości RAZ. Trzy wzorce stylu pod rząd to inaczej
+  // trzy kopie tego samego akapitu — dłuższy prompt, w którym najważniejsze
+  // zdanie (polecenie użytkownika) tonie wśród powtórzeń.
+  const pierwszeWystapienie = new Map()
   const lines = refs.map((ref, i) => {
     const role = roleOf(ref.role)
-    const base = role?.prompt || ''
     const note = ref.note?.trim()
-    let line
-    if (ref.role === 'wlasne') line = note || 'Użyj tego obrazu zgodnie z opisem.'
-    else line = note ? `${base} Dodatkowo: ${ensureSentence(note)}` : base
+    let base
+    if (ref.role === 'wlasne') base = note || 'Użyj tego obrazu zgodnie z opisem.'
+    else if (!pierwszeWystapienie.has(ref.role)) {
+      pierwszeWystapienie.set(ref.role, i)
+      base = role?.prompt || ''
+    } else {
+      const label = role?.label || ref.role
+      base = `${label.charAt(0).toUpperCase()}${label.slice(1)}: tak samo jak obraz nr ${pierwszeWystapienie.get(ref.role) + 1}.`
+    }
+    const line = ref.role !== 'wlasne' && note ? `${base} Dodatkowo: ${ensureSentence(note)}` : base
     return `${i + 1}. ${line}`
   })
   const head = refs.length === 1 ? 'Załączony obraz:' : 'Załączone obrazy, w kolejności:'

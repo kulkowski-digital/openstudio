@@ -199,15 +199,35 @@ export default function Boards({ boards, activeId, onActiveChange, onChanged, on
         </div>
       )}
 
+      {/* Dwa przyciski, bo to są dwie różne prośby. „W tym klimacie” bierze z obrazów
+          nastrój i kolory, a resztę wymyśla od nowa — i to jest dobre, gdy chcesz czegoś
+          innego w podobnej atmosferze. „Kolejny projekt w tym stylu” odtwarza typografię,
+          układ i efekty, czyli to, czego oczekuje ktoś, kto wrzucił trzy swoje miniatury.
+          Jeden przycisk oznaczał, że druga prośba w ogóle nie miała jak dojść do modelu. */}
       {chosen.length > 0 && (
         <div className="sticky bottom-4 z-10">
-          <Card className="p-4 flex flex-wrap items-center gap-4 border-cyan/40 bg-panel-2/95 backdrop-blur">
-            <span className="text-sm">
-              Zaznaczone: <span className="font-mono text-cyan">{chosen.length}</span>
-              {chosen.length > 6 && <span className="text-orange text-xs ml-2">mniej, ale spójnych referencji daje lepszy efekt</span>}
-            </span>
-            <button onClick={() => setSelected(new Set())} className="text-xs text-muted underline">odznacz wszystkie</button>
-            <button onClick={() => onGenerate(chosen)} className="btn-primary px-5 py-2.5 ml-auto">generuj w tym klimacie</button>
+          <Card className="p-4 border-cyan/40 bg-panel-2/95 backdrop-blur space-y-3">
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-sm">
+                Zaznaczone: <span className="font-mono text-cyan">{chosen.length}</span>
+                {chosen.length > 6 && <span className="text-orange text-xs ml-2">mniej, ale spójnych referencji daje lepszy efekt</span>}
+              </span>
+              <button onClick={() => setSelected(new Set())} className="text-xs text-muted underline">odznacz wszystkie</button>
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <button onClick={() => onGenerate(chosen, 'inspiracja')}
+                  className="rounded-full border border-line px-4 py-2.5 text-sm text-muted hover:text-ink hover:border-muted/50 transition">
+                  zainspiruj się
+                </button>
+                <button onClick={() => onGenerate(chosen, 'styl')} className="btn-primary px-5 py-2.5">
+                  kolejny projekt w tym stylu
+                </button>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted leading-relaxed">
+              <b className="text-ink">Kolejny projekt w tym stylu</b> — model odtwarza typografię, układ, kolory i efekty
+              z tych obrazów, a zmienia treść zgodnie z Twoim opisem. <b className="text-ink">Zainspiruj się</b> — bierze
+              tylko klimat i kolory, resztę komponuje od nowa. Rolę każdego obrazu zobaczysz i poprawisz w generatorze.
+            </p>
           </Card>
         </div>
       )}

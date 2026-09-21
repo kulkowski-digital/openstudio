@@ -54,8 +54,15 @@ export class KieProvider {
     return { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' }
   }
 
-  /** Surowe zapytanie + parsowanie koperty {code,msg,data}. */
-  async #call(method, url, { body, retries = 0 } = {}) {
+  /**
+   * Surowe zapytanie + parsowanie koperty {code,msg,data}.
+   *
+   * `timeoutMs` jest po to, żeby jedno zawieszone połączenie nie zatrzymało
+   * odpytywania statusu na zawsze: bez limitu `fetch` potrafi wisieć, dopóki
+   * system operacyjny nie zerwie gniazda, a użytkownik widzi wtedy „generuję…”
+   * bez końca i nie wie, czy czekać, czy restartować.
+   */
+  async #call(method, url, { body, retries = 0, timeoutMs = 30000 } = {}) {
     let lastError
     for (let attempt = 0; attempt <= retries; attempt++) {
       if (attempt > 0) await sleep(backoff(attempt))
@@ -65,10 +72,14 @@ export class KieProvider {
           method,
           headers: this.headers,
           body: body ? JSON.stringify(body) : undefined,
+          signal: AbortSignal.timeout(timeoutMs),
         })
       } catch (err) {
+        const przekroczonyCzas = err?.name === 'TimeoutError' || err?.name === 'AbortError'
         lastError = new ProviderError(`Sieć: ${err.message}`, {
-          human: 'Brak połączenia z Kie.ai. Sprawdź internet.',
+          human: przekroczonyCzas
+            ? `Kie.ai nie odpowiedziało w ciągu ${Math.round(timeoutMs / 1000)} s.`
+            : 'Brak połączenia z Kie.ai. Sprawdź internet.',
           retryable: true,
         })
         if (attempt < retries) continue
@@ -107,7 +118,7 @@ export class KieProvider {
 
   /** Saldo kredytów na koncie. Darmowe — używane też do walidacji klucza. */
   async credits() {
-    const payload = await this.#call('GET', `${apiBase()}/api/v1/chat/credit`, { retries: 2 })
+    const payload = await this.#call('GET', `${apiBase()}/api/v1/chat/credit`, { retries: 2, timeoutMs: 15000 })
     return Number(payload?.data ?? 0)
   }
 
@@ -129,6 +140,9 @@ export class KieProvider {
     const payload = await this.#call('POST', `${apiBase()}/api/v1/jobs/createTask`, {
       body: callBackUrl ? { model, input, callBackUrl } : { model, input },
       retries: 0,
+      // Hojnie, bo zerwanie TEGO żądania zostawia zadanie w stanie „nie wiem,
+      // czy ruszyło” — a tego nie ponawiamy automatycznie, bo to podwójna opłata.
+      timeoutMs: 90000,
     })
     const taskId = payload?.data?.taskId
     if (!taskId) throw new ProviderError('Brak taskId w odpowiedzi', { human: 'Dostawca nie zwrócił numeru zadania.' })
@@ -140,7 +154,7 @@ export class KieProvider {
    * @returns {Promise<{state:'running'|'success'|'fail', urls:string[], credits:number|null, costTimeMs:number|null, failMsg:string|null, raw:object}>}
    */
   async status(taskId) {
-    const payload = await this.#call('GET', `${apiBase()}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, { retries: 3 })
+    const payload = await this.#call('GET', `${apiBase()}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, { retries: 3, timeoutMs: 20000 })
     const d = payload?.data || {}
     const state = d.state === 'success' ? 'success' : d.state === 'fail' ? 'fail' : 'running'
     let urls = []
@@ -189,6 +203,7 @@ export class KieProvider {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({ base64Data: base64, uploadPath, fileName }),
+      signal: AbortSignal.timeout(120000),   // duże pliki referencji idą wolno
     })
     const text = await res.text()
     let payload

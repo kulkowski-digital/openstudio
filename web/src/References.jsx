@@ -32,7 +32,8 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
       try {
         const prepared = await prepareImage(file)
         const res = await api.upload(prepared)
-        const entry = { pin: res.pin, role: guessRole(file.name), note: '' }
+        const { role, guessed } = guessRole(file.name)
+        const entry = { pin: res.pin, role, note: '', guessedRole: guessed }
         onChange((prev) => (prev.some((r) => r.pin.id === entry.pin.id) ? prev : [...prev, entry]))
       } catch (err) {
         setError(err.message)
@@ -81,7 +82,23 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
     if (url) return addUrl(url)
   }
 
-  const update = (pinId, patch) => onChange((prev) => prev.map((r) => (r.pin.id === pinId ? { ...r, ...patch } : r)))
+  // Główny wzorzec = pierwszy obraz z rolą „styl” w kolejności wysyłki. Ta sama
+  // reguła co w `server/prompt.js`, więc etykieta nie kłamie względem promptu.
+  const primaryPatternId = modelRefs.find((r) => r.role === 'styl')?.pin.id ?? null
+  /** Przesuwa wzorzec przed pozostałe wzorce, nie ruszając reszty kolejności. */
+  const makePrimary = (pinId) => onChange((prev) => {
+    const first = prev.findIndex((r) => r.role === 'styl')
+    const from = prev.findIndex((r) => r.pin.id === pinId)
+    if (first < 0 || from < 0 || first === from) return prev
+    const next = [...prev]
+    const [moved] = next.splice(from, 1)
+    next.splice(first, 0, moved)
+    return next
+  })
+
+  // Zmiana czegokolwiek ręcznie kasuje adnotację „zgadnięte” — od tej chwili rola
+  // jest decyzją użytkownika, nie naszą.
+  const update = (pinId, patch) => onChange((prev) => prev.map((r) => (r.pin.id === pinId ? { ...r, ...patch, ...('role' in patch ? { guessedRole: false } : {}) } : r)))
   const remove = (pinId) => onChange((prev) => prev.filter((r) => r.pin.id !== pinId))
   const move = (i, dir) => onChange((prev) => {
     const j = i + dir
@@ -145,6 +162,9 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
                       {(roleChoices.some((r) => r.value === ref.role) ? roleChoices : roles).map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                     <span className="text-[11px] text-muted">{role?.hint}</span>
+                    {ref.role === 'styl' && (ref.pin.id === primaryPatternId
+                      ? <span className="text-[10px] font-mono text-cyan border border-cyan/40 rounded-full px-2 py-0.5">główny wzorzec</span>
+                      : <button type="button" onClick={() => makePrimary(ref.pin.id)} className="text-[11px] text-cyan underline">ustaw jako główny</button>)}
                     <button type="button" onClick={() => remove(ref.pin.id)} className="ml-auto text-[11px] text-muted hover:text-pink">usuń</button>
                   </div>
                   {role?.overlay ? (
@@ -172,8 +192,19 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
                     placeholder={ref.role === 'wlasne' ? 'co model ma z tym zrobić? (wymagane)' : 'dodatkowa uwaga, np. „w czarnej bluzie” (opcjonalnie)'}
                     className={`w-full rounded-lg bg-panel-2 border px-2 py-1 text-xs ${ref.role === 'wlasne' && !ref.note.trim() ? 'border-pink/60' : 'border-line'}`} />
                   )}
+                  {ref.guessedRole && (
+                    <p className="text-[11px] text-orange leading-relaxed">
+                      Rolę zgadliśmy z nazwy pliku — sprawdź, czy się zgadza. Od niej zależy, co model zrobi z tym obrazem.
+                    </p>
+                  )}
+                  {/* Instrukcja roli bywa długa (wzorzec stylu wylicza cechy typografii),
+                      a przy trzech obrazach zalałaby ekran trzy razy tym samym. Zwinięta
+                      — ale nadal dosłowna, bo to jest zdanie, które naprawdę pojedzie. */}
                   {role?.prompt && (
-                    <p className="text-[11px] text-muted/80 leading-relaxed">→ w prompcie: „{role.prompt}”</p>
+                    <details className="text-[11px] text-muted/80 leading-relaxed">
+                      <summary className="cursor-pointer select-none">→ co model dostanie w prompcie</summary>
+                      <p className="mt-1">„{role.prompt}”</p>
+                    </details>
                   )}
                 </div>
               </li>
@@ -218,11 +249,15 @@ export default function References({ refs, onChange, roles, maxRefs, styleRefsCo
   )
 }
 
-/** Zgadujemy rolę po nazwie pliku; użytkownik i tak może ją zmienić jednym kliknięciem. */
+/**
+ * Podpowiadamy rolę po nazwie pliku, ale mówimy wprost, że to zgadywanka:
+ * cicho nadana rola decyduje, co model zrobi z obrazem, a pomyłka kosztuje
+ * kredyty. `guessed` zapala adnotację przy wpisie, dopóki użytkownik nie wybierze sam.
+ */
 function guessRole(name = '') {
   const n = name.toLowerCase()
-  if (/logo|znak|brand/.test(n)) return 'logo'
-  if (/produkt|product|sku|packshot/.test(n)) return 'produkt'
-  if (/portret|selfie|avatar/.test(n)) return 'osoba'
-  return 'inspiracja'
+  if (/logo|znak|brand/.test(n)) return { role: 'logo', guessed: true }
+  if (/produkt|product|sku|packshot/.test(n)) return { role: 'produkt', guessed: true }
+  if (/portret|selfie|avatar/.test(n)) return { role: 'osoba', guessed: true }
+  return { role: 'inspiracja', guessed: false }
 }

@@ -51,6 +51,17 @@ Dane: ${DATA_DIR}`)
   process.exit(0)
 }
 
+// Domyślnie Node ubija proces przy nieobsłużonym odrzuceniu obietnicy — i wtedy
+// aplikacja po prostu „przestaje działać”, bez śladu w terminalu, a użytkownik
+// widzi w przeglądarce tylko „brak połączenia”. Wolimy zapisać powód i zostać
+// przy życiu: zadania w kolejce czekają na dysku i mają szansę się dokończyć.
+process.on('unhandledRejection', (reason) => {
+  console.error('\n  Nieobsłużony błąd w tle (aplikacja działa dalej):', reason?.stack || String(reason))
+})
+process.on('uncaughtException', (err) => {
+  console.error('\n  Nieobsłużony wyjątek (aplikacja działa dalej):', err?.stack || String(err))
+})
+
 const port = await freePort(DEFAULT_PORT)
 const { readConfig, writeConfig } = await import('../server/store.js')
 ensureDataDir()

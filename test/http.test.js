@@ -422,6 +422,79 @@ test('referencje stylu dokładają się do inspiracji wybranych ręcznie', async
   assert.equal(jobs[0].pinIds[0], recznie.id, 'ręczny wybór ma pierwszeństwo przy limicie modelu')
 })
 
+test('„kolejny projekt w tym stylu” z tablicy działa BEZ zapisanego stylu', async () => {
+  // Regresja z 21.09.2026: tablica przekazywała wszystko jako „inspiracja”, więc
+  // trzy własne miniatury dawały prompt „weź klimat, nie kopiuj treści” — model
+  // zmieniał typografię i układ, czyli dokładnie to, co miał zachować.
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const wzorce = []
+  for (const n of [31, 32]) {
+    const { pin } = await (await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ base64: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(32, n)]).toString('base64'), name: `miniatura-${n}.png` }) })).json()
+    wzorce.push(pin)
+  }
+  const references = wzorce.map((p) => ({ pinId: p.id, role: 'styl', note: '' }))
+  const input = { modelId: 'gpt-image-2-5-flare-image-to-image', references, values: { prompt: 'odcinek o cenach', resolution: '1K', count: 1 } }
+
+  const preview = await (await call('/api/prompt-preview', { method: 'POST', body: JSON.stringify({ ...input, prompt: 'odcinek o cenach', styleId: null }) })).json()
+  assert.match(preview.prompt, /Wzorzec stylu:/)
+  assert.match(preview.prompt, /kolejny projekt z tej samej serii/)
+  assert.match(preview.prompt, /Główny wzorzec stylu to obraz nr 1/)
+  assert.doesNotMatch(preview.prompt, /Inspiracja: weź z niej klimat/)
+  // Długa instrukcja roli tylko przy pierwszym obrazie, kolejne odsyłają do niej.
+  assert.equal(preview.prompt.match(/odtwórz możliwie wiernie/g).length, 1)
+  assert.match(preview.prompt, /2\. Wzorzec stylu: tak samo jak obraz nr 1\./)
+
+  const res = await call('/api/generate', { method: 'POST', body: JSON.stringify(input) })
+  assert.equal(res.status, 200)
+  const { jobs } = await res.json()
+  await waitFor(() => readJobs().find((j) => j.id === jobs[0].id)?.status === 'done', 15000)
+  // Podgląd i żądanie muszą wyjść z tej samej logiki — inaczej „pokaż pełny prompt” kłamie.
+  assert.equal(state.lastInput.prompt, preview.prompt)
+  assert.equal(jobs[0].input.prompt, preview.prompt)
+})
+
+test('główny wzorzec to pierwszy obraz z rolą „styl”, a nie pierwszy w ogóle', async () => {
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const pins = []
+  for (const n of [41, 42]) {
+    const { pin } = await (await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ base64: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(32, n)]).toString('base64'), name: `p-${n}.png` }) })).json()
+    pins.push(pin)
+  }
+  const preview = await (await call('/api/prompt-preview', {
+    method: 'POST',
+    body: JSON.stringify({
+      prompt: 'okładka',
+      modelId: 'gpt-image-2-5-flare-image-to-image',
+      references: [{ pinId: pins[0].id, role: 'osoba' }, { pinId: pins[1].id, role: 'styl' }],
+    }),
+  })).json()
+  assert.match(preview.prompt, /Główny wzorzec stylu to obraz nr 2/)
+})
+
+test('zadanie zapisuje role EFEKTYWNE i migawkę ustawień stylu', async () => {
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const { pin } = await (await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ base64: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(32, 51)]).toString('base64'), name: 'wzorzec.png' }) })).json()
+  const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Migawka', referencePinIds: [pin.id], strength: 'mocny' }) })).json()
+
+  const res = await call('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-image-to-image', values: { prompt: 'kolejny', resolution: '1K', count: 1 }, styleId: style.id }),
+  })
+  assert.equal(res.status, 200)
+  const { jobs } = await res.json()
+  const job = readJobs().find((j) => j.id === jobs[0].id)
+  // Do żądania pin stylu wchodzi jako „inspiracja”, ale model zobaczył „wzorzec stylu”.
+  assert.equal(job.references.find((r) => r.pinId === pin.id).role, 'styl')
+  assert.equal(job.styleSnapshot.strength, 'mocny')
+  assert.equal(job.styleSnapshot.referencePriority, 'images')
+  assert.deepEqual(job.styleSnapshot.referencePinIds, [pin.id])
+
+  // Późniejsza zmiana stylu nie może przepisywać historii tego zadania.
+  const { style: zmieniony } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, id: style.id, name: 'Migawka', referencePinIds: [], strength: 'lekki' }) })).json()
+  assert.equal(zmieniony.strength, 'lekki', 'styl naprawdę się zmienił — inaczej test niczego nie sprawdza')
+  assert.equal(readJobs().find((j) => j.id === jobs[0].id).styleSnapshot.strength, 'mocny')
+})
+
 test('eksport stylu daje plik do wysłania, import robi z niego własny styl', async () => {
   const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Do wysłania' }) })).json()
   const res = await call(`/api/styles/${style.id}/export`)

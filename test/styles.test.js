@@ -27,7 +27,11 @@ test('wzorce wizualne zastępują sprzeczne chipy i paletę, zachowują role oso
   const references = [{ pinId: 'a', role: 'inspiracja' }, { pinId: 'b', role: 'osoba' }, { pinId: 'c', role: 'logo' }]
   const prompt = composePrompt({ userPrompt: 'Nowy tytuł', style, references })
   assert.match(prompt, /1\. Wzorzec stylu:/)
-  assert.match(prompt, /krój i grubość liter/)
+  // Nazwane cechy typografii, bez których model „odtwarza styl” jako dowolny napis.
+  for (const cecha of [/charakter kroju/, /szerokość liter/, /wielkość liter/, /podział napisu na wiersze/, /kąt nachylenia/, /gradient/, /obrys i cień/]) {
+    assert.match(prompt, cecha)
+  }
+  assert.match(prompt, /Zachowaj wygląd napisów, ale nie ich treść/)
   assert.match(prompt, /2\. Osoba:/)
   assert.match(prompt, /3\. Logo:/)
   assert.doesNotMatch(prompt, /minimalistyczny|Paleta kolorów:/)

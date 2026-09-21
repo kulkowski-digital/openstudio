@@ -46,7 +46,7 @@ export class Queue extends EventEmitter {
   }
 
   /** Tworzy tyle zadań, ile wersji zamówił użytkownik. Zwraca listę zadań. */
-  enqueue({ modelId, values, calibration = {}, references = [], overlays = [], styleId = null, styleName = null, userPrompt = null, variantOf = null, correction = null }) {
+  enqueue({ modelId, values, calibration = {}, references = [], overlays = [], styleId = null, styleName = null, styleSnapshot = null, userPrompt = null, variantOf = null, correction = null }) {
     const manifest = this.manifest(modelId)
     if (!manifest) throw new Error(`Nieznany model: ${modelId}`)
     const count = countOf(manifest, values)
@@ -72,6 +72,7 @@ export class Queue extends EventEmitter {
         pinIds: references.map((r) => r.pinId),
         styleId,
         styleName,
+        styleSnapshot,
         userPrompt,
         variantOf,
         correction,
@@ -157,7 +158,12 @@ export class Queue extends EventEmitter {
     if (this.stopped) return
     try {
       const status = await this.provider.status(job.taskId)
+      // Ostatnie UDANE sprawdzenie. Bez tego „generuję…” wygląda identycznie,
+      // gdy zadanie po prostu trwa i gdy od dziesięciu minut nie ma łączności.
+      job.lastStatusAt = new Date().toISOString()
+      job.pollErrors = 0
       if (status.state === 'running') {
+        this.#emit(job)
         this.#schedulePoll(job, Math.min(prevDelay * 1.5, this.pollMax))
         return
       }
@@ -196,6 +202,10 @@ export class Queue extends EventEmitter {
       this.#emit(job)
     } catch (err) {
       job.pollErrors = (job.pollErrors || 0) + 1
+      job.pollError = err.human || err.message
+      // Dostawca, który ODPOWIEDZIAŁ błędem (kod HTTP), to co innego niż zerwane
+      // połączenie: pierwsze wymaga reakcji użytkownika, drugie zwykle mija samo.
+      job.pollErrorKind = err.code ? 'api' : 'siec'
       if (job.pollErrors > 60) {
         job.status = 'unknown'
         job.error = `Nie udało się sprawdzić statusu: ${err.human || err.message}. Zadanie mogło się wykonać — sprawdź w panelu Kie.ai.`
@@ -226,7 +236,7 @@ export class Queue extends EventEmitter {
       let lastErr
       for (let attempt = 0; attempt < this.downloadAttempts; attempt++) {
         try {
-          const res = await this.fetch(url)
+          const res = await this.fetch(url, { signal: AbortSignal.timeout(120000) })
           if (!res.ok) throw new Error(`HTTP ${res.status}`)
           const buf = Buffer.from(await res.arrayBuffer())
           fs.writeFileSync(file, buf)

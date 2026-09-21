@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from './api.js'
 import { Alert, Badge, Card, Spinner, credits } from './ui.jsx'
 
 const STATUS = {
   queued: { label: 'w kolejce u Ciebie', tone: 'default' },
   submitting: { label: 'wysyłam do Kie.ai', tone: 'default' },
-  running: { label: 'generuję…', tone: 'cyan' },
+  // Kie nie rozróżnia „czeka w kolejce dostawcy” od „już się rysuje”, więc nie
+  // udajemy, że wiemy — mówimy, u kogo jest zadanie, a czas czekania widać obok.
+  running: { label: 'u Kie.ai — generuje się', tone: 'cyan' },
   downloading: { label: 'zapisuję na dysk', tone: 'cyan' },
   done: { label: 'gotowe', tone: 'cyan' },
   failed: { label: 'nie udało się', tone: 'pink' },
@@ -82,9 +84,10 @@ function JobTile({ job, onChange, boards = [], onPinned, fb, tags, onVariant }) 
             <img src={api.fileUrl(job.files[0])} alt={job.values?.prompt || 'wygenerowany obraz'} className="w-full h-full object-contain" />
           </a>
         ) : inProgress(job.status) ? (
-          <div className="flex flex-col items-center gap-2 text-muted text-xs">
+          <div className="flex flex-col items-center gap-2 text-muted text-xs px-4 text-center">
             <Spinner className="text-cyan" />
             {status.label}
+            <Postep job={job} />
           </div>
         ) : (
           <div className="text-4xl opacity-30">✕</div>
@@ -232,4 +235,47 @@ function JobTile({ job, onChange, boards = [], onPinned, fb, tags, onVariant }) 
       </div>
     </Card>
   )
+}
+
+/**
+ * Ile to już trwa i kiedy ostatnio naprawdę udało się zapytać dostawcę o status.
+ * „Generuję…” bez tych dwóch liczb wygląda tak samo, gdy model liczy trzecią
+ * minutę i gdy od kwadransa nie ma łączności — a to dwie różne decyzje dla
+ * użytkownika: poczekać albo sprawdzić internet.
+ */
+function Postep({ job }) {
+  const [, tick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const od = job.startedAt || job.createdAt
+  const czeka = od ? sekundyOd(od) : null
+  const bezKontaktu = job.pollErrors > 0
+  const odSprawdzenia = job.lastStatusAt ? sekundyOd(job.lastStatusAt) : null
+
+  return (
+    <div className="space-y-1">
+      {czeka != null && <div className="font-mono text-[11px]">{trwanie(czeka)}</div>}
+      {bezKontaktu && (
+        <div className="text-orange text-[11px] leading-relaxed">
+          {job.pollErrorKind === 'api'
+            ? <>Kie.ai odpowiada błędem: {job.pollError} Zadanie czeka — sprawdzamy dalej.</>
+            : <>Brak połączenia z Kie.ai{odSprawdzenia != null ? ` od ${trwanie(odSprawdzenia)}` : ''}. Zadanie czeka — sprawdzamy dalej.</>}
+        </div>
+      )}
+      {!bezKontaktu && odSprawdzenia != null && odSprawdzenia > 20 && (
+        <div className="text-[11px] opacity-70">ostatnie sprawdzenie: {trwanie(odSprawdzenia)} temu</div>
+      )}
+    </div>
+  )
+}
+
+const sekundyOd = (iso) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
+
+function trwanie(s) {
+  if (s < 60) return `${s} s`
+  const m = Math.floor(s / 60)
+  return m < 60 ? `${m} min ${s % 60} s` : `${Math.floor(m / 60)} h ${m % 60} min`
 }
