@@ -200,6 +200,8 @@ export function createApp({ token, port }) {
     const styleRefs = (style?.referencePinIds || []).filter((id) => !chosenIds.has(id))
       .map((pinId) => ({ pinId, role: 'inspiracja', note: '', fromStyle: true }))
     const wanted = [...chosen, ...styleRefs]
+    const visualStyleError = validateVisualStyle(style, wanted, manifest)
+    if (visualStyleError) return { error: visualStyleError, status: 400 }
     let usedRefs = []
     let resolved = null
     let ignoredStyleRefs = 0
@@ -208,7 +210,7 @@ export function createApp({ token, port }) {
       try {
         resolved = await resolveReferences(provider(), wanted.map((r) => r.pinId), {
           limit: manifest.refs.max,
-          optional: new Set(styleRefs.map((r) => r.pinId)),
+          optional: new Set(),
         })
         usedRefs = resolved.usedPinIds.map((id) => wanted.find((r) => r.pinId === id))
         finalValues[imagesField] = resolved.urls
@@ -650,6 +652,9 @@ export function createApp({ token, port }) {
     const overlays = allRefs.filter((r) => roleOf(r.role)?.overlay).map((r) => normalizeOverlay(r.overlay || {}))
     const chosen = allRefs.filter((r) => !roleOf(r.role)?.overlay)
     const chosenIds = new Set(chosen.map((r) => r.pinId))
+    const wanted = [...chosen, ...(style?.referencePinIds || []).filter((id) => !chosenIds.has(id)).map((pinId) => ({ pinId }))]
+    const visualStyleError = validateVisualStyle(style, wanted, manifest)
+    if (visualStyleError) return c.json({ error: visualStyleError }, 400)
     const styleRefs = acceptsImages
       ? (style?.referencePinIds || []).filter((id) => !chosenIds.has(id) && boards.getPin(id)).map((pinId) => ({ pinId, role: 'inspiracja', note: '' }))
       : []
@@ -773,6 +778,14 @@ export function injectToken(html, token) {
 }
 
 /** Raport „Diagnostyka”: wszystko, co potrzebne do zgłoszenia, bez klucza API. */
+function validateVisualStyle(style, wanted, manifest) {
+  if (!style?.referencePinIds?.length) return null
+  if (manifest && !manifest.refs?.max) return 'Ten styl ma wzorce obrazowe. Wybierz model „z inspiracji”, aby zachować ich wygląd.'
+  if (manifest && wanted.length > manifest.refs.max) return `Wzorce stylu i Twoje obrazy przekraczają limit ${manifest.refs.max}. Usuń część referencji albo wybierz model z większym limitem.`
+  if (style.referencePinIds.some((id) => { const p = boards.getPin(id); return !p || !fs.existsSync(p.pin.file) })) return 'Brakuje pliku wzorca stylu. Otwórz edycję stylu i wybierz dostępne obrazy.'
+  return null
+}
+
 export async function diagnostics({ port, models = [], problems = [], provider = null } = {}) {
   const cfg = readConfig()
   let writable = false

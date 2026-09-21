@@ -26,6 +26,7 @@ export function emptyStyle(name = 'Mój styl') {
     avoid: [],
     extra: '',
     referencePinIds: [],
+    referencePriority: 'images',
     strength: 'wyrazny',
     defaults: { modelId: null, aspect_ratio: null, resolution: null },
   }
@@ -97,6 +98,7 @@ export function normalize(input, { keepId = true } = {}) {
     extra: String(input.extra || '').slice(0, 400),
     // Referencje są lokalne, więc cudzy plik ich nie przywlecze.
     referencePinIds: (Array.isArray(input.referencePinIds) ? input.referencePinIds : []).slice(0, MAX_REFERENCES),
+    referencePriority: input.referencePriority === 'description' ? 'description' : 'images',
     strength,
     // Dopiski z Twoich uwag (dziennik stylu): max 3, każdy z datą, do wyłączenia jednym kliknięciem.
     learned: (Array.isArray(input.learned) ? input.learned : [])
@@ -127,12 +129,12 @@ export function importStyle(payload) {
  * Składa finalny prompt. To jest dokładnie to, co widzi użytkownik pod
  * „Pokaż pełny prompt” i co leci do API — bez niespodzianek.
  */
-export function buildPrompt(userPrompt, style) {
+export function buildPrompt(userPrompt, style, { visual = false } = {}) {
   const base = String(userPrompt || '').trim()
   if (!style) return base
 
   const lead = STRENGTHS.find((s) => s.value === style.strength)?.lead || 'Zachowaj ten styl:'
-  const descriptors = CHIP_GROUPS
+  const descriptors = (visual && style.referencePriority !== 'description' ? [] : CHIP_GROUPS)
     .map((g) => chipPrompt(g.key, style.chips?.[g.key]))
     .filter(Boolean)
 
@@ -142,7 +144,7 @@ export function buildPrompt(userPrompt, style) {
     const extra = style.extra.trim().replace(/\s+/g, ' ')
     parts.push(/[.!?]$/.test(extra) ? extra : `${extra}.`)
   }
-  if (style.palette?.length) {
+  if (style.palette?.length && (!visual || style.referencePriority === 'description')) {
     parts.push(`Paleta kolorów: ${style.palette.join(', ')} (kolory orientacyjne, trzymaj się ich nastroju).`)
   }
   const avoid = (style.avoid || []).map(avoidPrompt).filter(Boolean)

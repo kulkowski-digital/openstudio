@@ -5,6 +5,12 @@
  */
 export const REFERENCE_ROLES = [
   {
+    value: 'styl',
+    label: 'wzorzec stylu',
+    hint: 'typografia, układ, kolory i efekty',
+    prompt: 'Wzorzec stylu: odtwórz możliwie wiernie język graficzny tego obrazu: krój i grubość liter, proporcje i odstępy typografii, hierarchię tekstu, układ i skalę elementów, kadrowanie, paletę, kontrast, obrysy, cienie, poświaty i faktury. Zachowaj charakter projektu, a treść napisów i temat zastąp zgodnie z poleceniem użytkownika. Nie przenoś przypadkowych napisów, logo ani tożsamości osób ze wzorca.',
+  },
+  {
     value: 'inspiracja',
     label: 'inspiracja',
     hint: 'klimat, światło, kolory — nie treść',

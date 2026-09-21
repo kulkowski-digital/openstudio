@@ -3,7 +3,7 @@ import { api } from './api.js'
 import { extractPalette, isHex, readableOn } from './palette.js'
 import { Alert, Badge, Card, Label, Spinner } from './ui.jsx'
 
-const STEPS = ['paleta', 'opis', 'referencje']
+const STEPS = ['wzorce wyglądu', 'kolory (opcjonalnie)', 'opis (opcjonalnie)']
 
 /** Lista zapisanych stylów + kreator w trzech krokach. */
 export default function Styles({ styles, catalog, boards, models, onChanged, onUse }) {
@@ -46,7 +46,7 @@ export default function Styles({ styles, catalog, boards, models, onChanged, onU
           <input type="file" accept=".json,application/json" className="hidden"
             onChange={(e) => { if (e.target.files[0]) importFile(e.target.files[0]); e.target.value = '' }} />
         </label>
-        <span className="text-xs text-muted">Styl to zapisany przepis na wygląd: paleta, opis i referencje w jednym miejscu.</span>
+        <span className="text-xs text-muted">Wybierz obrazy wzorcowe, aby kolejne projekty zachowały ich typografię, kompozycję i efekty.</span>
       </div>
 
       {error && <Alert kind="error" onClose={() => setError(null)}>{error}</Alert>}
@@ -64,7 +64,7 @@ export default function Styles({ styles, catalog, boards, models, onChanged, onU
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {styles.map((style) => (
             <StyleCard key={style.id} style={style} catalog={catalog}
-              onUse={() => onUse(style)}
+              boards={boards} onUse={() => onUse(style)}
               onEdit={() => setEditing(style)}
               onDeleted={onChanged} />
           ))}
@@ -74,10 +74,11 @@ export default function Styles({ styles, catalog, boards, models, onChanged, onU
   )
 }
 
-function StyleCard({ style, catalog, onUse, onEdit, onDeleted }) {
+function StyleCard({ style, catalog, boards, onUse, onEdit, onDeleted }) {
   const [confirm, setConfirm] = useState(false)
   const [journalOpen, setJournalOpen] = useState(false)
   const descriptors = describe(style, catalog)
+  const patterns = (style.referencePinIds || []).map((id) => boards.flatMap((b) => b.pins).find((p) => p.id === id)).filter(Boolean)
 
   return (
     <Card className="p-4 space-y-3">
@@ -86,6 +87,7 @@ function StyleCard({ style, catalog, onUse, onEdit, onDeleted }) {
         <Badge tone="cyan">{catalog.strengths.find((s) => s.value === style.strength)?.label || 'wyraźnie'}</Badge>
       </div>
 
+      {patterns.length > 0 && <div className="grid grid-cols-2 gap-2">{patterns.map((pin, i) => <img key={pin.id} src={api.fileUrl(pin.file)} alt={`${i === 0 ? 'Główny wzorzec' : 'Wzorzec'}: ${pin.name}`} className="w-full rounded-lg border border-line" />)}</div>}
       {style.palette.length > 0 && (
         <div className="flex rounded-lg overflow-hidden h-10">
           {style.palette.map((hex) => (
@@ -97,7 +99,7 @@ function StyleCard({ style, catalog, onUse, onEdit, onDeleted }) {
       )}
 
       <p className="text-xs text-muted leading-relaxed min-h-[2.5rem]">
-        {descriptors.length ? descriptors.join(' · ') : 'bez opisu — działa sama paleta'}
+        {patterns.length && style.referencePriority !== 'description' ? 'Wygląd z obrazów: typografia, kompozycja, kolory i efekty. Ogólne określenia i paleta nie nadpisują wzorców.' : descriptors.length ? descriptors.join(' · ') : 'bez opisu — działa sama paleta'}
       </p>
 
       {style.learned?.length > 0 && (
@@ -108,7 +110,7 @@ function StyleCard({ style, catalog, onUse, onEdit, onDeleted }) {
         <button onClick={onUse} className="text-cyan underline">użyj w generatorze</button>
         <button onClick={onEdit} className="text-muted underline">edytuj</button>
         <button onClick={() => setJournalOpen((v) => !v)} className="text-muted underline">{journalOpen ? 'schowaj dziennik' : 'dziennik'}</button>
-        <a href={api.styleExportUrl(style.id)} download className="text-muted underline">pobierz plik</a>
+        <a href={api.styleExportUrl(style.id)} download title="Eksport zawiera ustawienia, ale nie pliki wzorców. Na innym komputerze trzeba dodać je ponownie." className="text-muted underline">eksport ustawień (bez obrazów)</a>
         {confirm ? (
           <span className="flex items-center gap-2">
             <button onClick={async () => { await api.deleteStyle(style.id); onDeleted() }} className="text-pink underline">na pewno usuń</button>
@@ -242,7 +244,11 @@ function Creator({ initial, catalog, boards, models, onCancel, onSaved }) {
     setBusy(true)
     setError(null)
     try {
-      const res = await api.saveStyle(draft)
+      const preferred = models.find((m) => m.id === draft.defaults.modelId)
+      const modelId = draft.referencePinIds?.length && !preferred?.refs?.max
+        ? (models.find((m) => m.refs?.max > 0 && m.recommended) || models.find((m) => m.refs?.max > 0))?.id
+        : draft.defaults.modelId
+      const res = await api.saveStyle({ ...draft, defaults: { ...draft.defaults, modelId } })
       onSaved(res.style)
     } catch (err) {
       setError(err.message)
@@ -273,9 +279,9 @@ function Creator({ initial, catalog, boards, models, onCancel, onSaved }) {
 
       {error && <Alert kind="error">{error}</Alert>}
 
-      {step === 0 && <PaletteStep draft={draft} set={set} pins={allPins} />}
-      {step === 1 && <DescriptionStep draft={draft} set={set} catalog={catalog} />}
-      {step === 2 && <ReferencesStep draft={draft} set={set} pins={allPins} models={models} catalog={catalog} />}
+      {step === 0 && <ReferencesStep draft={draft} set={set} pins={allPins} models={models} catalog={catalog} />}
+      {step === 1 && <PaletteStep draft={draft} set={set} pins={allPins} />}
+      {step === 2 && <DescriptionStep draft={draft} set={set} catalog={catalog} />}
 
       <div className="flex items-center gap-3 pt-2 border-t border-line">
         {step > 0 && <button onClick={() => setStep(step - 1)} className="text-sm text-muted underline">wstecz</button>}
@@ -316,6 +322,7 @@ function PaletteStep({ draft, set, pins }) {
       <Label hint="Zaznacz inspiracje, z których mamy wziąć kolory. Liczymy je u Ciebie w przeglądarce — nic nie wychodzi do sieci i nic to nie kosztuje.">
         Skąd wziąć kolory
       </Label>
+      {draft.referencePinIds?.length > 0 && draft.referencePriority !== 'description' && <Alert kind="info">Kolory model odczyta bezpośrednio ze wzorców. Ta paleta jest pomocnicza; użyjesz jej do zmiany wyglądu dopiero po włączeniu opisu w następnym kroku.</Alert>}
 
       {pins.length === 0 ? (
         <Alert kind="info">Najpierw wrzuć kilka inspiracji na Tablice — stamtąd bierzemy paletę. Możesz też po prostu wkleić swoje HEX-y niżej.</Alert>
@@ -392,9 +399,15 @@ function PaletteStep({ draft, set, pins }) {
 
 function DescriptionStep({ draft, set, catalog }) {
   const toggle = (key, value) => set({ chips: { ...draft.chips, [key]: draft.chips[key] === value ? undefined : value } })
+  const imageLed = draft.referencePinIds?.length > 0 && draft.referencePriority !== 'description'
 
   return (
     <div className="space-y-5">
+      {draft.referencePinIds?.length > 0 && <div className="space-y-3">
+        <p className="text-sm">Domyślnie wygląd pochodzi z obrazów. Zapisane określenia i paleta są pomijane, aby nie zmieniały ich stylistyki. Dopisek i „Unikaj” nadal obowiązują.</p>
+        <label className="flex gap-2 text-sm"><input type="checkbox" checked={!imageLed} onChange={(e) => set({ referencePriority: e.target.checked ? 'description' : 'images' })} />Chcę zmienić wygląd wzorców opisem i paletą</label>
+      </div>}
+      <fieldset disabled={imageLed} className={`space-y-5 ${imageLed ? 'opacity-40' : ''}`}>
       {catalog.groups.map((group) => (
         <div key={group.key}>
           <Label hint={group.help}>{group.label}</Label>
@@ -409,6 +422,7 @@ function DescriptionStep({ draft, set, catalog }) {
           </div>
         </div>
       ))}
+      </fieldset>
 
       <div>
         <Label hint="Czego model ma nie robić. Działa lepiej niż proszenie o to w prompcie za każdym razem.">Unikaj</Label>
@@ -429,7 +443,7 @@ function DescriptionStep({ draft, set, catalog }) {
       <div>
         <Label hint="Jedno zdanie własnymi słowami, jeśli chipy czegoś nie łapią.">Dopisek (opcjonalnie)</Label>
         <input value={draft.extra} onChange={(e) => set({ extra: e.target.value })}
-          placeholder="np. dużo pustej przestrzeni wokół, zawsze jeden bohater"
+          placeholder="np. nagłówek zawsze w dwóch wierszach, zachowaj obrys liter"
           id="style-extra" name="style-extra"
           className="w-full rounded-xl bg-panel-2 border border-line px-4 py-2 text-sm" />
       </div>
@@ -458,8 +472,8 @@ function ReferencesStep({ draft, set, pins, models, catalog }) {
   return (
     <div className="space-y-5">
       <div>
-        <Label hint={`Te obrazy pojadą z KAŻDĄ generacją w tym stylu (o ile model je przyjmuje). Maksimum ${catalog.maxReferences}.`}>
-          Stałe referencje
+        <Label hint={`Wybierz projekty, których wygląd chcesz kontynuować. Wszystkie wybrane wzorce trafią do modelu dopiero przy generacji. Maksimum ${catalog.maxReferences}.`}>
+          Wzorce wyglądu
         </Label>
         {pins.length === 0 ? (
           <p className="text-xs text-muted">Brak inspiracji na tablicach — styl będzie działał samym opisem i paletą.</p>
@@ -475,14 +489,20 @@ function ReferencesStep({ draft, set, pins, models, catalog }) {
                     else if (next.size < catalog.maxReferences) next.add(pin.id)
                     set({ referencePinIds: [...next] })
                   }}
-                  className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition ${on ? 'border-cyan' : 'border-line opacity-70 hover:opacity-100'}`}>
-                  <img src={api.fileUrl(pin.file)} alt={pin.name} className="w-full h-full object-cover" />
+                  className={`w-40 rounded-lg overflow-hidden border-2 transition ${on ? 'border-cyan' : 'border-line opacity-70 hover:opacity-100'}`}>
+                  <img src={api.fileUrl(pin.file)} alt={pin.name} className="w-full aspect-video object-contain" />
+                  <span className="block text-[10px] p-1">{on ? `✓ Wzorzec ${[...chosen].indexOf(pin.id) + 1}` : pin.boardName}</span>
                 </button>
               )
             })}
           </div>
         )}
         <p className="text-[11px] text-muted mt-2">wybrano: {chosen.size}/{catalog.maxReferences}</p>
+        <div className="space-y-2 mt-3">{[...chosen].map((id, i) => {
+          const pin = pins.find((p) => p.id === id)
+          return <div key={id} className="flex items-center gap-3 text-xs"><span className="flex-1">{i + 1}. {pin?.name || 'Brak pliku wzorca'}{i === 0 ? ' — główny wzorzec' : ''}</span>{i > 0 && <button className="text-cyan underline" onClick={() => set({ referencePinIds: [id, ...[...chosen].filter((v) => v !== id)] })}>ustaw jako główny</button>}<button className="text-muted underline" onClick={() => set({ referencePinIds: [...chosen].filter((v) => v !== id) })}>odłącz</button></div>
+        })}</div>
+        <p className="text-xs text-muted mt-2">Pierwszy wybrany wzorzec określa główny układ i typografię. Kolejne uzupełniają styl. Zdjęcie osoby i logo dodaj w generatorze z odpowiednimi rolami. Model odtwarza wygląd liter, ale nie gwarantuje identycznego fontu ani układu co do piksela.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -495,7 +515,7 @@ function ReferencesStep({ draft, set, pins, models, catalog }) {
               {i2iModels.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
             </optgroup>
             <optgroup label="z tekstu">
-              {t2iModels.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
+              {t2iModels.map((m) => <option disabled={chosen.size > 0} key={m.id} value={m.id}>{m.title}</option>)}
             </optgroup>
           </select>
         </div>

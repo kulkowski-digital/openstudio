@@ -9,6 +9,7 @@ process.env.OPENSTUDIO_HOME = HOME
 
 const styles = await import('../server/styles.js')
 const { readStyles, writeStyles } = await import('../server/store.js')
+const { composePrompt } = await import('../server/prompt.js')
 
 const MARKA = {
   name: 'Kulkowski Digital',
@@ -20,6 +21,21 @@ const MARKA = {
 }
 
 beforeEach(() => writeStyles([]))
+
+test('wzorce wizualne zastępują sprzeczne chipy i paletę, zachowują role osoby i logo', () => {
+  const style = styles.normalize({ ...MARKA, referencePinIds: ['a'] })
+  const references = [{ pinId: 'a', role: 'inspiracja' }, { pinId: 'b', role: 'osoba' }, { pinId: 'c', role: 'logo' }]
+  const prompt = composePrompt({ userPrompt: 'Nowy tytuł', style, references })
+  assert.match(prompt, /1\. Wzorzec stylu:/)
+  assert.match(prompt, /krój i grubość liter/)
+  assert.match(prompt, /2\. Osoba:/)
+  assert.match(prompt, /3\. Logo:/)
+  assert.doesNotMatch(prompt, /minimalistyczny|Paleta kolorów:/)
+  assert.match(prompt, /dużo czarnej przestrzeni wokół/)
+  const override = composePrompt({ userPrompt: 'Nowy tytuł', style: { ...style, referencePriority: 'description' }, references })
+  assert.match(override, /minimalistyczny/)
+  assert.match(override, /Paleta kolorów:/)
+})
 
 test('styl zapisuje się i wraca z listy', () => {
   const saved = styles.saveStyle(MARKA)

@@ -48,7 +48,11 @@ export default function Generator({
   useEffect(() => {
     if (!style) return
     const d = style.defaults || {}
-    if (d.modelId && models.some((m) => m.id === d.modelId)) setModelId(d.modelId)
+    const preferred = models.find((m) => m.id === d.modelId)
+    const target = style.referencePinIds?.length
+      ? (preferred?.refs?.max > 0 ? preferred : models.find((m) => m.refs?.max > 0 && m.recommended) || models.find((m) => m.refs?.max > 0))
+      : preferred
+    if (target) setModelId(target.id)
     const apply = () => setValues((v) => ({
       ...v,
       ...(d.aspect_ratio ? { aspect_ratio: d.aspect_ratio } : {}),
@@ -89,13 +93,15 @@ export default function Generator({
   ]
   const styleRefsAlive = (style?.referencePinIds || []).filter((id) => boards.some((b) => b.pins.some((p) => p.id === id)) && !usedRefs.some((r) => r.pin.id === id))
   const styleRefsCount = acceptsImages ? Math.max(0, Math.min(styleRefsAlive.length, maxRefs - usedRefs.length)) : 0
+  const patternPins = (style?.referencePinIds || []).map((id) => boards.flatMap((b) => b.pins).find((p) => p.id === id))
+  const styleError = patternPins.length > 0 ? !acceptsImages ? 'Wzorce stylu wymagają modelu „z inspiracji”.' : patternPins.some((p) => !p) ? 'Brakuje wzorca stylu. Popraw wybór obrazów w edycji stylu.' : modelRefs.length + (style?.referencePinIds || []).filter((id) => !modelRefs.some((r) => r.pin.id === id)).length > maxRefs ? `Wszystkie obrazy i wzorce muszą mieścić się w limicie ${maxRefs}. Usuń część lub zmień model.` : null : null
 
   // Podgląd pełnego promptu liczy serwer — tym samym kodem, którym składa go do wysyłki.
   useEffect(() => {
     if (!showPrompt) return
     const t = setTimeout(() => {
       api.promptPreview(values.prompt || '', styleId || null, refPayload, modelId)
-        .then((r) => setFullPrompt(r.prompt)).catch(() => setFullPrompt(null))
+        .then((r) => setFullPrompt(r.prompt)).catch((err) => setFullPrompt(err.message))
     }, 250)
     return () => clearTimeout(t)
   }, [showPrompt, values.prompt, styleId, modelId, JSON.stringify(refPayload)])
@@ -115,7 +121,7 @@ export default function Generator({
 
   const missingOwnInstruction = usedRefs.some((r) => r.role === 'wlasne' && !r.note.trim())
   const hasImages = usedRefs.length > 0 || styleRefsCount > 0
-  const ready = Boolean(values.prompt?.trim()) && (!acceptsImages || hasImages) && !missingOwnInstruction
+  const ready = Boolean(values.prompt?.trim()) && (!acceptsImages || hasImages) && !missingOwnInstruction && !styleError
   const i2iModel = models.find((m) => m.kind === 'i2i' && m.recommended) || models.find((m) => m.kind === 'i2i')
 
   async function generate() {
@@ -186,6 +192,12 @@ export default function Generator({
             </button>
           </div>
 
+          {patternPins.length > 0 && <div className="space-y-2">
+            <p className="text-xs text-muted">Wzorce stylu — typografia, kompozycja i efekty. {style.referencePriority !== 'description' ? 'Wygląd z obrazów; ogólne określenia i paleta wyłączone.' : 'Opis i paleta modyfikują wygląd wzorców.'}</p>
+            <div className="flex flex-wrap gap-2">{patternPins.filter(Boolean).map((p) => <img key={p.id} src={api.fileUrl(p.file)} alt={p.name} className="w-28 rounded-lg border border-line" />)}</div>
+            <p className="text-xs text-muted">Własną twarz dodaj jako „osoba”, a znak marki jako „logo”. Wzorce określają wygląd projektu.</p>
+          </div>}
+          {styleError && <Alert kind="warn">{styleError}</Alert>}
           {showPrompt && (
             <div>
               <pre className="text-[11px] font-mono bg-panel-2 border border-line rounded-xl p-3 whitespace-pre-wrap leading-relaxed max-h-64 overflow-auto">

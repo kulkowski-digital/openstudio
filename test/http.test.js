@@ -403,6 +403,9 @@ test('referencje stylu dokładają się do inspiracji wybranych ręcznie', async
   const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Z referencją', referencePinIds: [stylePin.id] }) })).json()
 
   const recznie = (await (await call('/api/boards')).json()).boards[0].pins.find((p) => p.id !== stylePin.id)
+  const preview = await (await call('/api/prompt-preview', { method: 'POST', body: JSON.stringify({ prompt: 'w tym klimacie', styleId: style.id, modelId: 'gpt-image-2-5-flare-image-to-image', references: [recznie.id] }) })).json()
+  assert.match(preview.prompt, /Wzorzec stylu/)
+  assert.doesNotMatch(preview.prompt, /minimalistyczny/)
   const res = await call('/api/generate', {
     method: 'POST',
     body: JSON.stringify({
@@ -415,6 +418,7 @@ test('referencje stylu dokładają się do inspiracji wybranych ręcznie', async
   assert.equal(res.status, 200)
   const { jobs } = await res.json()
   assert.equal(jobs[0].pinIds.length, 2, 'pin stylu musi dojechać razem z ręcznie wybranym')
+  assert.equal(jobs[0].input.prompt, preview.prompt)
   assert.equal(jobs[0].pinIds[0], recznie.id, 'ręczny wybór ma pierwszeństwo przy limicie modelu')
 })
 
@@ -442,7 +446,7 @@ test('generacja ze skasowanym stylem nie idzie do API', async () => {
   assert.equal(state.submits, before)
 })
 
-test('styl z referencjami działa też z modelem „z tekstu” (referencje pomijamy, nie blokujemy)', async () => {
+test('styl z referencjami blokuje model z tekstu przed uploadem i generacją', async () => {
   const board = (await (await call('/api/boards')).json()).boards[0]
   const pin = board.pins[0]
   const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Z refami', referencePinIds: [pin.id] }) })).json()
@@ -452,9 +456,9 @@ test('styl z referencjami działa też z modelem „z tekstu” (referencje pomi
     method: 'POST',
     body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-text-to-image', values: { prompt: 'kot', resolution: '1K', count: 1 }, styleId: style.id }),
   })
-  assert.equal(res.status, 200, 'model z tekstu nie może odrzucać stylu z referencjami')
+  assert.equal(res.status, 400)
   const body = await res.json()
-  assert.match(body.note, /pominięta/)
+  assert.match(body.error, /wzorce obrazowe/)
   assert.equal(state.uploads, uploadsBefore, 'pominiętych referencji nie wysyłamy do dostawcy')
 
   // ręczny wybór inspiracji przy modelu z tekstu to nadal błąd
@@ -463,6 +467,23 @@ test('styl z referencjami działa też z modelem „z tekstu” (referencje pomi
     body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-text-to-image', values: { prompt: 'kot', resolution: '1K', count: 1 }, pinIds: [pin.id], styleId: style.id }),
   })
   assert.equal(zRecznymi.status, 400)
+})
+
+test('brak wzorca i przekroczenie limitu blokują generację oraz podgląd przed uploadem', async () => {
+  await call('/api/key', { method: 'POST', body: JSON.stringify({ apiKey: 'dobry-klucz-test' }) })
+  const board = (await (await call('/api/boards')).json()).boards[0]
+  const { pin } = await (await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ base64: PNG.toString('base64'), name: 'pattern.png' }) })).json()
+  for (const ids of [['missing-pattern'], [pin.id]]) {
+    const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, referencePinIds: ids }) })).json()
+    const references = ids[0] === pin.id ? Array.from({ length: 16 }, (_, i) => ({ pinId: `extra-${i}`, role: 'inspiracja' })) : []
+    const input = { modelId: 'gpt-image-2-5-flare-image-to-image', styleId: style.id, references, values: { prompt: 'test', resolution: '1K' } }
+    const before = { uploads: state.uploads, submits: state.submits }
+    const res = await call('/api/generate', { method: 'POST', body: JSON.stringify(input) })
+    assert.equal(res.status, 400)
+    const preview = await call('/api/prompt-preview', { method: 'POST', body: JSON.stringify({ ...input, prompt: 'test' }) })
+    assert.equal(preview.status, 400)
+    assert.deepEqual({ uploads: state.uploads, submits: state.submits }, before)
+  }
 })
 
 test('domyślne ustawienia stylu uzupełniają tylko to, czego nie podał użytkownik', async () => {
@@ -552,7 +573,7 @@ test('„wyślij ponownie” przechodzi całą drogę od nowa: te same obrazy, t
   assert.equal(nowy.values.prompt.match(/Zachowaj ten styl/g).length, 1, 'styl doklejony dokładnie raz')
 })
 
-test('skasowana referencja stylu nie blokuje generacji — jest pomijana z informacją', async () => {
+test('skasowana referencja stylu blokuje generację z wyjaśnieniem', async () => {
   const board = (await (await call('/api/boards')).json()).boards[0]
   const tmp = (await (await call(`/api/boards/${board.id}/pins`, { method: 'POST', body: JSON.stringify({ base64: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(32, 77)]).toString('base64'), name: 'tymczasowy.png' }) })).json()).pin
   const { style } = await (await call('/api/styles', { method: 'POST', body: JSON.stringify({ ...STYL, name: 'Z martwym pinem', referencePinIds: [tmp.id] }) })).json()
@@ -563,8 +584,8 @@ test('skasowana referencja stylu nie blokuje generacji — jest pomijana z infor
     method: 'POST',
     body: JSON.stringify({ modelId: 'gpt-image-2-5-flare-image-to-image', values: { prompt: 'x', resolution: '1K', count: 1 }, references: [{ pinId: other.id }], styleId: style.id }),
   })
-  assert.equal(res.status, 200)
-  assert.match((await res.json()).note, /zniknęła z tablicy/)
+  assert.equal(res.status, 400)
+  assert.match((await res.json()).error, /Brakuje pliku wzorca/)
 })
 
 test('kasowanie pliku z dysku usuwa obraz i metadane, zadanie znika z biblioteki', async () => {
