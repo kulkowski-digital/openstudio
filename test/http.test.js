@@ -50,7 +50,7 @@ before(async () => {
       const n = (state.tasks.get(id) ?? 0) + 1
       state.tasks.set(id, n)
       if (n < 2) return send({ code: 200, data: { state: 'generating' } }) // pierwszy odpyt: w toku
-      return send({ code: 200, data: { state: 'success', resultJson: JSON.stringify({ resultUrls: [`http://127.0.0.1:${kie.address().port}/out.png`] }), creditsConsumed: 6, costTime: 59000 } })
+      return send({ code: 200, data: { state: 'success', resultJson: JSON.stringify({ resultUrls: [`http://127.0.0.1:${kie.address().port}/out.png`] }), creditsConsumed: 6, costTime: 81 } })
     }
     if (url.pathname === '/out.png') { res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(PNG) }
     send({ code: 404, msg: 'not found' }, 404)

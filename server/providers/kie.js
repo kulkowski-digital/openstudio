@@ -151,7 +151,7 @@ export class KieProvider {
 
   /**
    * Status zadania. Normalizuje odpowiedź Kie do wspólnego kształtu.
-   * @returns {Promise<{state:'running'|'success'|'fail', urls:string[], credits:number|null, costTimeMs:number|null, failMsg:string|null, raw:object}>}
+   * @returns {Promise<{state:'running'|'success'|'fail', urls:string[], credits:number|null, costTimeSeconds:number|null, failMsg:string|null, raw:object}>}
    */
   async status(taskId) {
     const payload = await this.#call('GET', `${apiBase()}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, { retries: 3, timeoutMs: 20000 })
@@ -170,7 +170,10 @@ export class KieProvider {
       state,
       urls,
       credits: d.creditsConsumed != null ? Number(d.creditsConsumed) : null,
-      costTimeMs: d.costTime != null ? Number(d.costTime) : null,
+      // Kie podaje `costTime` w SEKUNDACH, nie w milisekundach. Zmierzone na
+      // prawdziwej generacji 22.09.2026: zadanie trwało 91 s od zegara (z naszym
+      // odpytywaniem i pobraniem pliku), a Kie zwróciło `costTime: 81`.
+      costTimeSeconds: d.costTime != null ? Number(d.costTime) : null,
       failMsg: state === 'fail' ? (d.failMsg || humanError(d.failCode)) : null,
       raw: d,
     }

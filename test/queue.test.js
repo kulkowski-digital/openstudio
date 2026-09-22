@@ -29,7 +29,7 @@ function fakeProvider({ failSubmit, failState, credits = 6, runningTicks = 1 } =
       calls.status++
       if (ticks++ < runningTicks) return { state: 'running', urls: [], credits: null }
       if (failState) return { state: 'fail', urls: [], credits: null, failMsg: 'moderacja odrzuciła prompt' }
-      return { state: 'success', urls: ['https://example.test/out.png'], credits, costTimeMs: 59000 }
+      return { state: 'success', urls: ['https://example.test/out.png'], credits, costTimeSeconds: 81 }
     },
   }
 }
@@ -173,7 +173,7 @@ test('nieudane sprawdzenie statusu jest widoczne, udane kasuje licznik błędów
       // „generuję…” i nie wie, czy czekać, czy sprawdzać internet.
       if (padnij) { padnij = false; const e = new Error('ETIMEDOUT'); e.human = 'Kie.ai nie odpowiedziało w ciągu 20 s.'; throw e }
       // (błąd bez `code` = problem z siecią; z kodem = dostawca odpowiedział)
-      return { state: 'success', urls: ['https://example.test/out.png'], credits: 6, costTimeMs: 1000 }
+      return { state: 'success', urls: ['https://example.test/out.png'], credits: 6, costTimeSeconds: 1 }
     },
   }
   const q = new Queue({ provider, models, fetchImpl: fakeFetch, concurrency: 1, pollIntervals: { min: 10, max: 20 } })

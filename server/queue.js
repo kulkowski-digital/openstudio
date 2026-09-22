@@ -179,7 +179,7 @@ export class Queue extends EventEmitter {
       }
       job.status = 'downloading'
       job.credits = status.credits
-      job.costTimeMs = status.costTimeMs
+      job.costTimeSeconds = status.costTimeSeconds
       job.sourceUrls = status.urls
       this.#emit(job)
 

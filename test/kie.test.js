@@ -47,7 +47,7 @@ test('submit() NIE ponawia POST-a po błędzie sieci (ochrona przed podwójną o
 test('status() ponawia GET po odpowiedzi, która nie jest JSON-em', async () => {
   const f = mockFetch([
     { body: '<html>502 Bad Gateway</html>' },
-    { body: { code: 200, data: { state: 'success', resultJson: '{"resultUrls":["https://x/y.png"]}', creditsConsumed: 6, costTime: 59000 } } },
+    { body: { code: 200, data: { state: 'success', resultJson: '{"resultUrls":["https://x/y.png"]}', creditsConsumed: 6, costTime: 81 } } },
   ])
   const p = new KieProvider({ apiKey: 'test-key-1234567890', fetchImpl: f })
   const s = await p.status('task_abc')
